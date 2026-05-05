@@ -17,12 +17,12 @@
     <TextView
         android:id="@+id/videoTitle"
         android:layout_width="110dp"
-        android:layout_height="20dp"
+        android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:ellipsize="end"
         android:gravity="center"
+        android:includeFontPadding="false"
         android:maxLines="1"
-        android:paddingTop="4dp"
         android:singleLine="true"
         android:text="视频名称"
         android:textSize="14sp" />

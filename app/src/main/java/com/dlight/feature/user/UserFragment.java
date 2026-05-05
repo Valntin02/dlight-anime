@@ -44,7 +44,7 @@ public class UserFragment extends Fragment implements View.OnClickListener {
     private TextView tvUsername;
     private ShapeableImageView ivAvatarFile;  // 修改为 ShapeableImageView
 
-    private Button btnHistory,btnStar,btnDownload,btnLogout;
+    private View btnHistory, btnStar, btnDownload, btnSettings;
     private String TAG = "user img";
     private boolean urlFlag = false;
     private OnLogoutListener logoutListener;
@@ -60,21 +60,31 @@ public class UserFragment extends Fragment implements View.OnClickListener {
 
         tvUsername = rootView.findViewById(R.id.user_name);
         ivAvatarFile = rootView.findViewById(R.id.avatar_file);  // 获取 ShapeableImageView
-        btnHistory =rootView.findViewById(R.id.btn_history);
-        btnDownload=rootView.findViewById(R.id.btn_download);
-        btnLogout =rootView.findViewById(R.id.btn_logout);
-        btnStar=rootView.findViewById(R.id.btn_star);
-        logoutListener = (OnLogoutListener)  getParentFragment();
+        btnHistory = rootView.findViewById(R.id.btn_history);
+        btnDownload = rootView.findViewById(R.id.btn_download);
+        btnStar = rootView.findViewById(R.id.btn_star);
+        btnSettings = rootView.findViewById(R.id.btn_settings);
+        logoutListener = (OnLogoutListener) getParentFragment();
 
         btnHistory.setOnClickListener(this);
         btnDownload.setOnClickListener(this);
-        btnLogout.setOnClickListener(this);
         btnStar.setOnClickListener(this);
+        btnSettings.setOnClickListener(this);
         ivAvatarFile.setOnClickListener(this);
-        avatarRefresh(false,null);
 
+        avatarRefresh(false, null);
 
         return rootView;
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        // 用户从设置页退出登录后回到这里，立刻切回登录页
+        SharedPreferences sp = requireActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
+        if (!sp.getBoolean("is_logged_in", false) && logoutListener != null) {
+            logoutListener.Logout();
+        }
     }
 
 
@@ -102,7 +112,7 @@ public class UserFragment extends Fragment implements View.OnClickListener {
             else urlFlag=false;
 
             if (avatarFile != null && avatarFile.startsWith("http")) {
-                baseurl = avatarFile.trim();
+                baseurl = rewriteLoopbackHost(avatarFile.trim(), baseurl);
             } else {
                 baseurl += avatarFile == null ? "" : avatarFile.trim();
             }
@@ -124,6 +134,28 @@ public class UserFragment extends Fragment implements View.OnClickListener {
             .into(ivAvatarFile);  // 设置图片
     }
 }
+
+// 后端会把头像 URL 写死成 127.0.0.1/localhost（它自己机器上的回环地址），
+// 但模拟器里的 127.0.0.1 是模拟器自身——所以遇到这种 host 时改写成 Param 的 baseUrl host
+// (模拟器走 10.0.2.2，真机走 DEVICE_BASE_URL)。
+private static String rewriteLoopbackHost(String url, String baseUrl) {
+    if (url == null) return null;
+    try {
+        Uri u = Uri.parse(url);
+        String host = u.getHost();
+        if ("127.0.0.1".equals(host) || "localhost".equals(host) || "0.0.0.0".equals(host)) {
+            Uri base = Uri.parse(baseUrl);
+            String authority = base.getEncodedAuthority();
+            String scheme = base.getScheme();
+            if (authority != null && scheme != null) {
+                return u.buildUpon().scheme(scheme).encodedAuthority(authority).build().toString();
+            }
+        }
+    } catch (Exception ignored) {
+    }
+    return url;
+}
+
 @Override
 public void onClick(View v) {
     switch (v.getId()) {
@@ -136,17 +168,15 @@ public void onClick(View v) {
             //Toast.makeText(getContext(), "暂未开放此功能", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(getActivity(), ActvityDownVideo.class));
             break;
-        case R.id.btn_logout:
-            // 退出登录
-            logoutListener.Logout();
-            break;
         case R.id.btn_star:
             // 我的追番
             startActivity(new Intent(getActivity(), MyStarActivity.class));
             break;
         case R.id.avatar_file:
-            // 我的追番
             openImagePicker();
+            break;
+        case R.id.btn_settings:
+            startActivity(new Intent(getActivity(), SettingsActivity.class));
             break;
     }
 }
