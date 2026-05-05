@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- chip 文字色: 选中/勾选=白 / 默认=text_primary / 禁用=text_disabled -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:color="@color/text_disabled" android:state_enabled="false" />
+    <item android:color="@color/text_on_brand" android:state_checked="true" />
+    <item android:color="@color/text_on_brand" android:state_selected="true" />
+    <item android:color="@color/text_on_brand" android:state_pressed="true" />
+    <item android:color="@color/text_primary" />
+</selector>

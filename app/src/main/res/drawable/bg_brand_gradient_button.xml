@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前端 .text-gradient: linear-gradient(to right, #00D1FF, #7000FF) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <gradient
+        android:angle="0"
+        android:startColor="@color/gradient_brand_start"
+        android:endColor="@color/gradient_brand_end"
+        android:type="linear" />
+</shape>

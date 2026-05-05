@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="10dp"
+    android:gravity="center_vertical"
+    android:background="?android:attr/selectableItemBackground">
+
+    <!-- 封面图 -->
+    <ImageView
+        android:id="@+id/se_video_cover"
+        android:layout_width="80dp"
+        android:layout_height="100dp"
+        android:layout_marginEnd="12dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/button_style"/>
+
+    <!-- 文字内容 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_weight="1">
+
+        <!-- 视频标题 -->
+        <TextView
+            android:id="@+id/se_video_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="视频标题"
+            android:textSize="14sp"
+            android:maxLines="2"
+            android:ellipsize="end"/>
+
+
+        <TextView
+            android:id="@+id/se_video_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="视频状态"
+            android:textSize="12sp"
+            android:textColor="@color/text_tertiary"/>
+
+        <TextView
+            android:id="@+id/se_video_years"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="年份"
+            android:textSize="12sp"
+            android:textColor="@color/text_tertiary"/>
+
+        <!-- 播放进度 -->
+        <TextView
+            android:id="@+id/se_video_cv"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="CV"
+            android:maxLines="1"
+            android:textSize="12sp"
+            android:textColor="@color/text_tertiary"/>
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前端 .glass-nav: rgba(10,14,20,0.8) + border-bottom rgba(255,255,255,0.05) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/glass_nav_bg" />
+        </shape>
+    </item>
+    <item android:gravity="bottom" android:height="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/border_soft" />
+        </shape>
+    </item>
+</layer-list>

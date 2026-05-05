@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前端 .active-tab::after: 底部 2px brand 下划线 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:gravity="bottom" android:height="2dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="2dp" />
+            <solid android:color="@color/brand_500" />
+        </shape>
+    </item>
+</layer-list>

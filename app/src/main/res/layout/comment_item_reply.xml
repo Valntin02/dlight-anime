@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginBottom="8dp">
+
+    <!-- 用户信息区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingBottom="8dp">
+
+        <!-- 用户头像 -->
+        <ImageView
+            android:id="@+id/user_avatar"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="8dp"
+            android:src="@drawable/button_style"
+            />
+
+        <!-- 用户信息 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- 用户名 -->
+            <TextView
+                android:id="@+id/user_name"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="用户名"
+                android:textColor="@color/text_primary"
+                android:textSize="14sp"
+                />
+
+            <!-- 发布时间 -->
+            <TextView
+                android:id="@+id/post_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="2小时前"
+                android:textColor="@color/text_tertiary"
+                android:textSize="8sp" />
+            <!-- 评论内容 -->
+            <TextView
+                android:id="@+id/comment_content"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="这是评论内容"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold"
+                android:paddingTop="4dp"/>
+        </LinearLayout>
+    </LinearLayout>
+
+
+
+    <!-- 点赞、回复、举报区域 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="24dp"
+        android:orientation="horizontal"
+        android:gravity="end"
+        >
+
+        <!-- 点赞按钮 -->
+        <ImageView
+            android:id="@+id/like_button"
+            android:layout_width="17dp"
+            android:layout_height="17dp"
+            android:src="@drawable/material_thumbsup"
+            android:clickable="true"
+            android:focusable="true" />
+        <TextView
+            android:id="@+id/comment_ups"
+            android:layout_width="17dp"
+            android:layout_height="17dp"
+            android:text="0"
+            android:textSize="12sp"
+            android:layout_marginEnd="16dp"
+            />
+        <!-- 回复按钮 -->
+        <ImageView
+            android:id="@+id/reply_button"
+            android:layout_width="17dp"
+            android:layout_height="17dp"
+            android:src="@drawable/material_reply"
+            android:layout_marginEnd="16dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <!-- 举报按钮 -->
+        <ImageView
+            android:id="@+id/report_button"
+            android:layout_width="17dp"
+            android:layout_height="17dp"
+            android:src="@drawable/material_report"
+
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="0.5dp"
+        android:background="@color/border_soft" />
+</LinearLayout>

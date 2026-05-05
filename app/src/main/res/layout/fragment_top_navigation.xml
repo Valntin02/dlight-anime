@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:minHeight="48dp"
+    android:background="@drawable/bg_glass_nav"
+    android:gravity="start|center_vertical">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/home_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="首页"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:paddingLeft="12dp"
+            android:layout_marginEnd="20dp"
+            android:layout_centerVertical="true"
+            android:layout_alignParentStart="true" />
+
+        <TextView
+            android:id="@+id/home_anime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="动漫"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_secondary"
+            android:layout_toEndOf="@id/home_text"
+            android:layout_centerVertical="true" />
+
+        <TextView
+            android:id="@+id/btn_search"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="搜索"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/brand_500"
+            android:gravity="center_vertical"
+            android:drawableStart="@android:drawable/ic_menu_search"
+            android:drawableTint="@color/brand_500"
+            android:drawablePadding="4dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:focusable="true"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:layout_centerVertical="true"
+            android:layout_alignParentEnd="true" />
+    </RelativeLayout>
+
+</LinearLayout>

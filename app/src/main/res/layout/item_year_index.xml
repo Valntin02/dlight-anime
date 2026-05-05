@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:paddingStart="4dp"
+    android:paddingEnd="4dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <TextView
+        android:id="@+id/year_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minWidth="60dp"
+        android:gravity="center"
+        android:paddingStart="14dp"
+        android:paddingEnd="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:text="2025"
+        android:textSize="13sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_chip_state"
+        android:background="@drawable/year_button_background"
+        android:clickable="true"
+        android:focusable="true"
+        android:duplicateParentState="false" />
+</FrameLayout>

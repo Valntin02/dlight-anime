@@ -1,0 +1,14 @@
+apply from: "$rootDir/gradle/lib.gradle"
+
+android {
+    namespace 'com.shuyu.gsyvideoplayer'
+}
+
+dependencies {
+    implementation androidDependencies.appCompat
+    implementation androidDependencies.transition
+
+    api viewDependencies.ijkplayer
+    api project(":gsyVideoPlayer-proxy_cache")
+    api project(":gsyVideoPlayer-base")
+}

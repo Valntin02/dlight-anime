@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">次元之光</string>
+    <string name="title_activity_scrolling">ScrollingActivity</string>
+    <string name="detail_text">详情</string>
+    <string name="large_text">Large Text</string>
+    <string name="action_settings">Settings</string>
+</resources>

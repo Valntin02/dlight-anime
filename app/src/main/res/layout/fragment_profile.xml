@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/dark_bg">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- 用户信息区域 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:padding="24dp"
+            android:background="@drawable/bg_wiht_shadow"
+            android:layout_marginBottom="16dp">
+
+            <ImageView
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:src="@drawable/material_myinfo"
+                android:contentDescription="用户头像" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="未登录"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp" />
+
+        </LinearLayout>
+
+        <!-- 登录/注册按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <Button
+                android:id="@+id/btn_login"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp"
+                android:text="登录"
+                android:background="@drawable/button_background"
+                android:textColor="@color/text_primary" />
+
+            <Button
+                android:id="@+id/btn_register"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="注册"
+                android:background="@drawable/button_background2"
+                android:textColor="@color/text_primary" />
+
+        </LinearLayout>
+
+        <!-- 功能按钮列表 -->
+        <Button
+            android:id="@+id/btn_my_star"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="我的收藏"
+            android:background="@drawable/button_style"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_play_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="播放历史"
+            android:background="@drawable/button_style"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_settings"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="设置"
+            android:background="@drawable/button_style"
+            android:textColor="@color/text_primary"
+            android:layout_marginBottom="24dp" />
+
+        <Button
+            android:id="@+id/btn_logout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="退出登录"
+            android:background="@drawable/button_style2"
+            android:textColor="@color/text_primary" />
+
+    </LinearLayout>
+
+</ScrollView>

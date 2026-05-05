@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pill 按钮 + 涟漪 (推荐用于自定义 ImageButton/View) -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="@color/overlay_white_20">
+    <item android:drawable="@drawable/bg_pill_brand" />
+</ripple>

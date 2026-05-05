@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="3dp">
+
+    <!-- 视频图片 -->
+    <ImageView
+        android:id="@+id/videoImage"
+        android:layout_width="115dp"
+        android:layout_height="150dp"
+        android:src="@android:color/transparent" />
+
+    <!-- 视频标题 -->
+    <TextView
+        android:id="@+id/videoTitle"
+        android:layout_width="110dp"
+        android:layout_height="20dp"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:gravity="center"
+        android:maxLines="1"
+        android:paddingTop="4dp"
+        android:singleLine="true"
+        android:text="视频名称"
+        android:textSize="14sp" />
+</LinearLayout>

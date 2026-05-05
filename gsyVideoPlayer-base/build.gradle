@@ -1,0 +1,9 @@
+apply from: "$rootDir/gradle/lib.gradle"
+
+android {
+    namespace 'com.shuyu.gsy.base'
+}
+
+dependencies {
+    api viewDependencies.ijkplayer
+}

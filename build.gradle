@@ -1,0 +1,24 @@
+buildscript {
+    apply from: "gradle/dependencies.gradle"
+
+    repositories {
+        google()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.6.1'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url "https://maven.aliyun.com/repository/public" }
+        maven { url "https://jitpack.io" }
+    }
+}
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

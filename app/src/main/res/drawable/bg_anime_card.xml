@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前端 .anime-card 海报底框: aspect-[3/4] rounded-xl bg-dark-card -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="12dp" />
+    <solid android:color="@color/dark_card" />
+</shape>

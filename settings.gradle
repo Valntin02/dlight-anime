@@ -1,0 +1,9 @@
+include ":app",
+    ":gsyVideoPlayer",
+    ":gsyVideoPlayer-java",
+    ":gsyVideoPlayer-armv7a",
+    ":gsyVideoPlayer-armv64",
+    ":gsyVideoPlayer-x86",
+    ":gsyVideoPlayer-proxy_cache",
+    ":gsyVideoPlayer-exo_player2",
+    ":gsyVideoPlayer-base"

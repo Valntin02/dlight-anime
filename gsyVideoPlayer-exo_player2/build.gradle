@@ -1,0 +1,10 @@
+apply from: "$rootDir/gradle/lib.gradle"
+
+android {
+    namespace 'tv.danmaku.ijk.media.exo2'
+}
+
+dependencies {
+    api viewDependencies.media
+    api project(":gsyVideoPlayer-base")
+}

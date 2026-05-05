@@ -1,0 +1,13 @@
+apply from: "$rootDir/gradle/lib.gradle"
+
+android {
+    namespace 'com.shuyu.gsyvideoplayer.lib'
+}
+
+dependencies {
+    api project(":gsyVideoPlayer-java")
+    api project(":gsyVideoPlayer-exo_player2")
+    api project(":gsyVideoPlayer-armv7a")
+    api project(":gsyVideoPlayer-armv64")
+    api project(":gsyVideoPlayer-x86")
+}

@@ -1,0 +1,7 @@
+<!-- res/drawable/radio_button_selector.xml -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 选中状态 -->
+    <item android:drawable="@drawable/danmakuradio_button_checked" android:state_checked="true" />
+    <!-- 未选中状态 -->
+    <item android:drawable="@drawable/danmakuradio_button_unchecked" />
+</selector>

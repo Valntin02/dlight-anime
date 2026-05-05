@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:gravity="center_horizontal">
+
+    <!-- 头像和用户名在同一行 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="16dp"
+        android:gravity="start">
+
+        <!-- 圆形头像 -->
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/avatar_file"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_gravity="center"
+            android:src="@drawable/button_style"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/CircularShape" />
+
+        <!-- 用户名 -->
+        <TextView
+            android:id="@+id/user_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="我的asd"
+            android:layout_marginLeft="16dp"
+            android:gravity="center_vertical"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+
+    </LinearLayout>
+
+    <GridLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:columnCount="4"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="0dp"
+            android:layout_columnWeight="1"
+            android:layout_height="wrap_content"
+            >
+        <!-- 播放记录 -->
+            <Button
+                android:id="@+id/btn_history"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_margin="8dp"
+                android:background="@drawable/material_history" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="播放记录"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="0dp"
+            android:layout_columnWeight="1"
+            android:layout_height="wrap_content"
+          >
+        <!-- 我的追番 -->
+        <Button
+            android:id="@+id/btn_star"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="8dp"
+            android:background="@drawable/material_star" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="我的追番"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="0dp"
+            android:layout_columnWeight="1"
+            android:layout_height="wrap_content"
+            >
+        <!-- 离线缓存 -->
+        <Button
+            android:id="@+id/btn_download"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="8dp"
+            android:background="@drawable/material_download" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="离线缓存"
+                android:gravity="center"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:orientation="vertical"
+            android:layout_width="0dp"
+            android:layout_columnWeight="1"
+            android:layout_height="wrap_content"
+            >
+        <!-- 退出登录 -->
+        <Button
+            android:id="@+id/btn_logout"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_margin="8dp"
+            android:background="@drawable/material_logout" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="退出登录"
+                android:gravity="center"/>
+        </LinearLayout>
+    </GridLayout>
+
+</LinearLayout>

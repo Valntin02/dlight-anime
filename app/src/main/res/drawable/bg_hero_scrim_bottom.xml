@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前端 .custom-gradient: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(10,14,20,1) 100%) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="@color/hero_dark_fade_zero"
+        android:endColor="@color/hero_dark_fade_full"
+        android:type="linear" />
+</shape>

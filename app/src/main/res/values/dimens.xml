@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Default screen margins, per the Android Design guidelines. -->
+    <dimen name="activity_horizontal_margin">16dp</dimen>
+    <dimen name="activity_vertical_margin">16dp</dimen>
+
+    <!-- Post media height -->
+    <dimen name="post_media_height">200dp</dimen>
+
+    <!-- Text margin -->
+    <dimen name="text_margin">16dp</dimen>
+
+    <!-- App bar height -->
+    <dimen name="app_bar_height">180dp</dimen>
+
+    <!-- FAB margin -->
+    <dimen name="fab_margin">16dp</dimen>
+
+    <!-- Seek bar image -->
+    <dimen name="seek_bar_image">40dp</dimen>
+</resources>

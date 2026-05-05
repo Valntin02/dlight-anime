@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 前端 .from-brand-400.to-purple-500 (头像底色) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <gradient
+        android:angle="315"
+        android:startColor="@color/brand_400"
+        android:endColor="@color/purple_500"
+        android:type="linear" />
+</shape>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 主 CTA 圆角胶囊 (下载 / 收藏 / 更新密码 等) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <solid android:color="@color/brand_500" />
+    <corners android:radius="999dp" />
+</shape>

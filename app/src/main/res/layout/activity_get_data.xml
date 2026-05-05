@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="570dp"
+    android:orientation="vertical">
+
+    <!-- 标题和更多按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="7dp">
+
+        <TextView
+            android:id="@+id/titleText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="新番放送表"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+
+    </LinearLayout>
+
+    <RadioGroup
+        android:id="@+id/weekday_radio_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="7dp"
+        android:layout_marginBottom="7dp">
+
+        <RadioButton
+            android:id="@+id/radio_monday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周一"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+
+        <RadioButton
+            android:id="@+id/radio_tuesday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周二"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+
+        <RadioButton
+            android:id="@+id/radio_wednesday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周三"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+
+        <RadioButton
+            android:id="@+id/radio_thursday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周四"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+
+        <RadioButton
+            android:id="@+id/radio_friday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周五"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+
+        <RadioButton
+            android:id="@+id/radio_saturday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周六"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+
+        <RadioButton
+            android:id="@+id/radio_sunday"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:text="周日"
+            android:button="@null"
+            android:layout_marginEnd="7dp"
+            android:background="@drawable/button_style"
+            android:gravity="center"
+            android:padding="7dp"
+            android:layout_weight="1" />
+    </RadioGroup>
+
+
+    <!-- 视频列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recycler_view_videos"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>

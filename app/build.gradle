@@ -1,0 +1,99 @@
+apply plugin: "com.android.application"
+
+apply from: "$rootDir/gradle/base.gradle"
+apply from: "../gradle/exported.gradle"
+
+android {
+    defaultConfig {
+        applicationId "com.dlight"
+        versionCode 26
+        versionName PROJ_VERSION
+
+        multiDexEnabled true
+
+        ndk {
+            //设置支持的SO库架构
+            abiFilters "arm64-v8a", "armeabi-v7a", "x86"
+        }
+
+    }
+
+    viewBinding {
+        enabled = true
+    }
+
+    signingConfigs {
+        release {
+            storeFile file("../release.jks")
+            storePassword "123456"
+            keyAlias "debug"
+            keyPassword "123456"
+        }
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+        release {
+            minifyEnabled true
+            signingConfig signingConfigs.release
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+
+    lintOptions {
+        abortOnError false
+    }
+
+
+    namespace 'com.dlight'
+}
+
+dependencies {
+    implementation androidDependencies.appCompat
+    implementation androidDependencies.recyclerView
+    implementation androidDependencies.core
+    implementation viewDependencies.danmakuFlameMaster
+    implementation viewDependencies.ndkBitmap
+    implementation viewDependencies.glide
+    implementation androidDependencies.design
+    implementation androidDependencies.viewpager2
+
+    implementation androidDependencies.multidex
+
+    implementation project(":gsyVideoPlayer")
+
+    implementation dataDependencies.okhttpUtil
+    implementation dataDependencies.okhttp
+
+    implementation dataDependencies.permissionsDispatcher
+    annotationProcessor dataDependencies.permissionsDispatcherProcessor
+
+    debugImplementation dataDependencies.leakcanary
+
+    implementation 'androidx.recyclerview:recyclerview:1.4.0' // 确保使用的是最新版本
+
+    implementation 'com.android.support:appcompat-v7:28.0.0'  // 其他支持库
+    implementation 'com.squareup.retrofit2:retrofit:2.9.0'   // Retrofit
+    implementation 'com.squareup.retrofit2:converter-gson:2.9.0'   // Gson 转换器
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'   // OkHttp 库（Retrofit 的底层请求库）
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.12.0'  // OkHttp 日志拦截器
+    implementation 'com.squareup.picasso:picasso:2.71828'
+
+    implementation 'com.google.android.material:material:1.12.0'
+
+    // 使用 Glide 4.15.0
+    implementation 'com.github.bumptech.glide:glide:4.14.0'
+    annotationProcessor 'com.github.bumptech.glide:compiler:4.14.0'
+    //底部导航栏组件
+    implementation 'com.google.android.material:material:1.4.0'
+
+    implementation 'com.google.android.material:material:1.11.0'
+
+    def room_version = "2.6.1" // 最新稳定版本（2025年4月）
+
+    implementation "androidx.room:room-runtime:$room_version"
+    annotationProcessor "androidx.room:room-compiler:$room_version"
+}

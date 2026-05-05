@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ==========================================================
+         主题色板 — 与前端 (CMSOK/new_python/frontend) tailwind.config.cjs
+         + assets/style.css 完全对齐：极光蓝 (Brand) + 深空紫 (Accent)
+         ========================================================== -->
+
+    <!-- ====== 极光蓝品牌色系 (frontend.brand) ====== -->
+    <color name="brand_50">#E0FBFF</color>
+    <color name="brand_100">#B3F5FF</color>
+    <color name="brand_200">#80EFFF</color>
+    <color name="brand_300">#4DE9FF</color>
+    <color name="brand_400">#26E4FF</color>
+    <color name="brand_500">#00D1FF</color>  <!-- 核心品牌色 -->
+    <color name="brand_600">#00ADDB</color>
+    <color name="brand_700">#0089B7</color>
+    <color name="brand_800">#006593</color>
+    <color name="brand_900">#004A7A</color>
+
+    <!-- 品牌色透明度变体 (用于阴影 / 光晕 / 状态层) -->
+    <color name="brand_500_alpha08">#1400D1FF</color>   <!-- 8%  -->
+    <color name="brand_500_alpha12">#1F00D1FF</color>   <!-- 12% -->
+    <color name="brand_500_alpha15">#2600D1FF</color>   <!-- 15% (player-glow) -->
+    <color name="brand_500_alpha20">#3300D1FF</color>   <!-- 20% (shadow-brand-500/20) -->
+    <color name="brand_500_alpha30">#4D00D1FF</color>
+
+    <!-- ====== 深色主题背景 (frontend.dark) ====== -->
+    <color name="dark_bg">#0A0E14</color>        <!-- 极深星空蓝 - 主背景 (CSS var: client-bg) -->
+    <color name="dark_card">#151921</color>      <!-- 卡片背景 -->
+    <color name="dark_lighter">#1C212C</color>   <!-- 悬浮 / 交互状态 -->
+    <color name="dark_border">#21262D</color>    <!-- 边框色 (滚动条 thumb) -->
+    <color name="dark_border_hover">#30363D</color> <!-- 滚动条 hover -->
+
+    <color name="surface_1">#121A29</color>
+    <color name="surface_2">#182233</color>
+    <color name="surface_3">#1F2C42</color>
+    <color name="border_subtle">#2A3950</color>
+
+    <!-- ====== 辅助 / 渐变色 ====== -->
+    <color name="accent_500">#7000FF</color>     <!-- 深空紫 - text-gradient 终点 -->
+    <color name="accent_teal">#4AE5FF</color>
+    <color name="purple_400">#C084FC</color>     <!-- Tailwind purple-400 -->
+    <color name="purple_500">#A855F7</color>     <!-- Tailwind purple-500 (avatar gradient) -->
+
+    <!-- 文本渐变 / 按钮渐变端点 -->
+    <color name="gradient_brand_start">#00D1FF</color>
+    <color name="gradient_brand_end">#7000FF</color>
+
+    <!-- ====== 半透明覆盖层 (border-white/5, bg-white/5 等 Tailwind 类) ====== -->
+    <color name="overlay_white_5">#0DFFFFFF</color>     <!-- white/5 -->
+    <color name="overlay_white_10">#1AFFFFFF</color>    <!-- white/10 -->
+    <color name="overlay_white_20">#33FFFFFF</color>    <!-- white/20 -->
+    <color name="overlay_white_40">#66FFFFFF</color>
+    <color name="overlay_black_40">#66000000</color>    <!-- bg-black/40 hero scrim -->
+    <color name="overlay_black_60">#99000000</color>    <!-- card-overlay -->
+
+    <!-- 软边框：前端通用 `border-white/5` 取代旧 dark_border -->
+    <color name="border_soft">#0DFFFFFF</color>
+    <color name="border_soft_strong">#1AFFFFFF</color>
+
+    <!-- ====== Glass-nav (前端 .glass-nav: rgba(10,14,20,0.8) + blur) ====== -->
+    <color name="glass_nav_bg">#CC0A0E14</color>        <!-- 80% dark_bg -->
+    <color name="glass_nav_bg_strong">#E60A0E14</color>
+
+    <!-- 旧 Profile 玻璃卡保留 -->
+    <color name="glass_surface">#B3151921</color>
+    <color name="glass_surface_strong">#D9151921</color>
+    <color name="glass_border">#26FFFFFF</color>
+    <color name="glass_border_subtle">#14FFFFFF</color>
+
+    <!-- ====== Hero scrim (前端 .custom-gradient + 旧 profile_hero_scrim) ====== -->
+    <color name="hero_scrim_top">#140A0E14</color>
+    <color name="hero_scrim_middle">#8C0A0E14</color>
+    <color name="hero_scrim_bottom">#F00A0E14</color>
+    <color name="hero_dark_fade_full">#FF0A0E14</color>  <!-- custom-gradient 终点 -->
+    <color name="hero_dark_fade_zero">#000A0E14</color>  <!-- custom-gradient 起点 -->
+
+    <!-- ====== Profile 主题色 (兼容已有 fragment_profile.xml) ====== -->
+    <color name="profile_header_start">#12253B</color>
+    <color name="profile_header_end">#1A3A5F</color>
+    <color name="profile_chip_bg">#2A3F65</color>
+    <color name="profile_chip_text">#C6F7FF</color>
+    <color name="profile_glow">#3828D7FF</color>
+    <color name="profile_glow_soft">#1528D7FF</color>
+    <color name="profile_avatar_fill">#10192A</color>
+    <color name="profile_avatar_stroke">#3D628B</color>
+    <color name="profile_icon_bg">#1A2638</color>
+    <color name="profile_icon_stroke">#30445F</color>
+    <color name="text_on_hero_secondary">#C7D4DF</color>
+
+    <!-- ====== 文本颜色 ====== -->
+    <color name="text_primary">#E6EDF3</color>     <!-- 主要文本 (frontend CSS var: client-text) -->
+    <color name="text_secondary">#8B949E</color>   <!-- 次要文本 (gray-400) -->
+    <color name="text_tertiary">#6E7681</color>    <!-- 三级文本 (gray-500) -->
+    <color name="text_quaternary">#484F58</color>  <!-- gray-600 -->
+    <color name="text_disabled">#484F58</color>
+    <color name="text_on_brand">#FFFFFF</color>
+    <color name="text_link_hover">#26E4FF</color>  <!-- brand-400 hover -->
+
+    <!-- ====== 状态色 (与前端 element-plus 状态色一致) ====== -->
+    <color name="success">#52C41A</color>
+    <color name="warning">#FAAD14</color>
+    <color name="error">#FF4D4F</color>
+    <color name="info">#1890FF</color>
+
+    <!-- ====== 底部导航栏 ====== -->
+    <color name="nav_bg">#14161F</color>
+    <color name="nav_item_icon_color">#8B949E</color>
+    <color name="nav_item_icon_color_selected">#00D1FF</color>
+    <color name="nav_item_text_color">#8B949E</color>
+    <color name="nav_item_text_color_selected">#00D1FF</color>
+
+    <!-- ====== 其他 ====== -->
+    <color name="transparent">#00000000</color>
+    <color name="btn_rect_alpha">#56b3b3b3</color>
+    <color name="comment_item_reply">#1C212C</color>
+
+    <!-- ====== 向后兼容 (老代码引用) ====== -->
+    <color name="colorPrimary">@color/brand_500</color>
+    <color name="colorPrimaryDark">@color/brand_700</color>
+    <color name="colorAccent">@color/brand_500</color>
+    <color name="common_color">@color/brand_500</color>
+</resources>

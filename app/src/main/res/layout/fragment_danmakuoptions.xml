@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="200dp">
+<LinearLayout
+    android:id="@+id/danmaku_options"
+    android:layout_width="match_parent"
+    android:layout_height="200dp"
+    android:orientation="vertical"
+    android:padding="10dp"
+    android:background="#C4000000"
+    android:visibility="visible"
+    android:layout_alignParentBottom="true"
+    android:elevation="4dp">
+
+    <!-- 第一行：输入框和发送按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- 输入框 -->
+        <EditText
+            android:id="@+id/input_danmaku"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:background="@drawable/edittext_background"
+            android:gravity="center"
+            android:hint="请输入弹幕内容"
+            android:textSize="16sp"
+            android:padding="10dp"
+            android:singleLine="true"
+            android:inputType="text" />
+
+        <!-- 发送按钮 -->
+        <Button
+            android:id="@+id/btn_send_danmaku"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="发送"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/comment_send"
+            android:layout_marginLeft="10dp"/>
+    </LinearLayout>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:orientation="horizontal"
+
+
+        >
+        <!-- 弹幕类型选择部分 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="3"
+            android:orientation="vertical"
+            android:gravity="center"
+           >
+            <!-- 第二行：弹幕类型选择 -->
+            <RadioGroup
+                android:id="@+id/type_group"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:textColor="#FFFFFF"
+                >
+
+                <RadioButton
+                    android:id="@+id/type_top"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="顶部"
+                    android:textColor="#FF69B4"
+                    android:button="@drawable/danmakuradio_button_selector"/>
+
+                <RadioButton
+                    android:id="@+id/type_scroll"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="滚动"
+                    android:textColor="#FF69B4"
+                    android:button="@drawable/danmakuradio_button_selector"/>
+
+                <RadioButton
+                    android:id="@+id/type_bottom"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="底部"
+                    android:textColor="#FF69B4"
+                    android:button="@drawable/danmakuradio_button_selector"/>
+            </RadioGroup>
+        </LinearLayout>
+        <!-- 颜色选择部分 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="4"
+            android:orientation="horizontal"
+            android:gravity="center">
+            <Button
+                android:id="@+id/color_red"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#e54256" />
+
+            <Button
+                android:id="@+id/color_blue"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#39ccff" />
+
+            <Button
+                android:id="@+id/color_green"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#64DD17" />
+
+            <Button
+                android:id="@+id/color_yellow"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#ffe133" />
+
+            <Button
+                android:id="@+id/color_white"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#FFFFFF" />
+
+            <Button
+                android:id="@+id/color_purple"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#D500F9" />
+
+            <Button
+                android:id="@+id/color_black"
+                android:layout_width="0dp"
+                android:layout_height="40dp"
+                android:layout_weight="1"
+                android:background="#000000" />
+        </LinearLayout>
+
+    </LinearLayout>
+</LinearLayout>
+</FrameLayout>
