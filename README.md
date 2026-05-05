@@ -48,7 +48,6 @@
 
 - Android Studio（推荐 Hedgehog 或更新版本），使用其内置 JDK 构建
 - Android SDK Platform 35（compileSdk）；最低支持 Android 8.0（minSdk 26）
-- 联调时本地需运行 FastAPI 后端，监听 `:8000`
 
 ### 克隆 & 构建
 
@@ -59,18 +58,6 @@ JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home" ./gradle
 ```
 
 APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
-
-### 后端 baseUrl 配置
-
-后端地址由 `app/src/main/java/com/dlight/util/Param.java` 控制，按运行环境选择：
-
-| 场景 | baseUrl |
-|---|---|
-| 模拟器 | `http://10.0.2.2:8000/`（默认；无需 `adb reverse`）|
-| 真机同网段 | 改 `Param` 中的 `DEVICE_BASE_URL` 为路由器内网 IP |
-| 生产环境 | 运行时调用 `Param.getInstance().setBaseUrl(...)` 切换 |
-
-> 模拟器内的 `127.0.0.1` 指模拟器自身，访问宿主机服务必须走 `10.0.2.2`。
 
 ## 项目结构
 
