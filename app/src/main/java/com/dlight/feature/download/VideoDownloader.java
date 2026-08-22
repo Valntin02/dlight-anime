@@ -399,8 +399,9 @@ public class VideoDownloader {
 
     static void preparePlaylistState(File tempDirectory, List<String> segmentUrls)
             throws IOException {
-        String expected = playlistFingerprint(segmentUrls);
         File fingerprintFile = new File(tempDirectory, ".playlist.sha256");
+        deleteQuietly(new File(tempDirectory, ".playlist.sha256.part"));
+        String expected = playlistFingerprint(segmentUrls);
         boolean matches = fingerprintFile.isFile()
                 && expected.equals(readUtf8(fingerprintFile));
         if (!matches) {

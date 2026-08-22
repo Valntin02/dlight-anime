@@ -285,6 +285,23 @@ public class VideoDownloaderFileTest {
     }
 
     @Test
+    public void matchingPlaylistFingerprintClearsStaleFingerprintPart() throws Exception {
+        File tempDirectory = new File(temporaryFolder.getRoot(), "segments");
+        List<String> urls = Arrays.asList(
+                "https://cdn.example.com/0.ts", "https://cdn.example.com/1.ts");
+        VideoDownloader.preparePlaylistState(tempDirectory, urls);
+        File completed = new File(tempDirectory, "0.ts");
+        File fingerprintPart = new File(tempDirectory, ".playlist.sha256.part");
+        write(completed, "verified");
+        write(fingerprintPart, "stale");
+
+        VideoDownloader.preparePlaylistState(tempDirectory, urls);
+
+        assertFalse(fingerprintPart.exists());
+        assertArrayEquals(bytes("verified"), Files.readAllBytes(completed.toPath()));
+    }
+
+    @Test
     public void changedPlaylistFingerprintClearsCompletedSegments() throws Exception {
         File tempDirectory = new File(temporaryFolder.getRoot(), "segments");
         VideoDownloader.preparePlaylistState(tempDirectory,
