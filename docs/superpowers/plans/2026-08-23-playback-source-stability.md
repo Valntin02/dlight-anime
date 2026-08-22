@@ -249,6 +249,8 @@ public final class VodRecoveryMatcher {
 
 Replace the Activity's `findBestMatchedVod(...)` call with `VodRecoveryMatcher.findBest(videoData, ...)` and delete the private matcher.
 
+Store the active recovery Retrofit `Call`, cancel it at the start of `onDestroy`, and guard both recovery callbacks with `isDestory || isFinishing() || isDestroyed()` so an obsolete Activity cannot navigate or show a Toast after destruction.
+
 - [ ] **Step 4: Run all tests and build**
 
 ```bash
