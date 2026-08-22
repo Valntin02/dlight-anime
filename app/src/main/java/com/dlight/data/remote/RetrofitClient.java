@@ -1,5 +1,6 @@
 package com.dlight.data.remote;
 
+import com.dlight.network.ApiGsonFactory;
 import com.dlight.network.HttpClientFactory;
 import com.dlight.network.NetworkConfig;
 
@@ -19,7 +20,8 @@ public class RetrofitClient {
                 if (retrofit == null) {
                     retrofit = new Retrofit.Builder()
                             .baseUrl(NetworkConfig.apiBaseUrl())
-                            .addConverterFactory(GsonConverterFactory.create())
+                            .addConverterFactory(
+                                GsonConverterFactory.create(ApiGsonFactory.create()))
                             .client(HttpClientFactory.apiClient())
                             .build();
                 }
