@@ -9,28 +9,39 @@ import androidx.room.RoomDatabase;
 @Database(entities = {PlayRecord.class, MyStarRecord.class}, version = 1, exportSchema = false)
 public abstract class AppDatabase extends RoomDatabase {
 
+    static final String CANONICAL_DB_NAME = "play_record_db";
+    static final String LEGACY_DB_NAME = "myStar_records";
+
     private static AppDatabase instance;
 
     public abstract PlayRecordDao playRecordDao(); // 获取 DAO
 
     public abstract MyStarRecordDao myStarRecordDao();
+
     public static synchronized AppDatabase getInstancePlayRecord(Context context) {
-        if (instance == null) {
-            instance = Room.databaseBuilder(context.getApplicationContext(),
-                    AppDatabase.class, "play_record_db")
-                .fallbackToDestructiveMigration() // 若数据库版本更新，清空数据库
-                .build();
-        }
-        return instance;
+        return getInstance(context);
     }
 
     public static synchronized AppDatabase getInstanceMyStarRecord(Context context) {
+        return getInstance(context);
+    }
+
+    private static AppDatabase getInstance(Context context) {
+        Context applicationContext = context.getApplicationContext();
         if (instance == null) {
-            instance = Room.databaseBuilder(context.getApplicationContext(),
-                    AppDatabase.class, "myStar_records")
+            instance = Room.databaseBuilder(applicationContext,
+                    AppDatabase.class, CANONICAL_DB_NAME)
                 .fallbackToDestructiveMigration() // 若数据库版本更新，清空数据库
                 .build();
         }
+        LegacyRecordImporter.importIfNeeded(applicationContext, instance);
         return instance;
+    }
+
+    static synchronized void resetInstanceForTests() {
+        if (instance != null) {
+            instance.close();
+            instance = null;
+        }
     }
 }
