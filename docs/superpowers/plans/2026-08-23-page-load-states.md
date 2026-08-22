@@ -15,6 +15,8 @@
 **Files:**
 - Create: `app/src/main/java/com/dlight/ui/widget/LoadStateView.java`
 - Create: `app/src/test/java/com/dlight/ui/widget/LoadStateViewTest.java`
+- Modify: `app/src/main/res/values/strings.xml`
+- Create: `app/src/main/res/values/ids.xml`
 
 - [ ] **Step 1: Write failing Robolectric view-state tests**
 
@@ -22,7 +24,7 @@ Cover initial `GONE`, loading spinner/message/no retry, empty message/no retry, 
 
 - [ ] **Step 2: Implement the programmatic view**
 
-Create a vertical centered `LinearLayout` containing a `ProgressBar`, message `TextView`, and retry `Button`. Use existing colors and spacing, minimum 48dp retry target, and these methods:
+Create a vertical centered `LinearLayout` containing a `ProgressBar`, message `TextView`, and retry `Button`. Use string resources, stable child IDs, existing colors and spacing, dark text on the brand retry background for sufficient contrast, a minimum 48dp retry target, and a polite accessibility live region that announces attached state changes. Provide these methods:
 
 ```java
 public void showLoading(String message)
