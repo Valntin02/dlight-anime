@@ -11,9 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
@@ -26,6 +24,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
+import okhttp3.Response;
+import okhttp3.ResponseBody;
 
 public class VideoDownloader {
     public interface DownloadCallback {
@@ -258,17 +259,21 @@ public class VideoDownloader {
             boolean allowPrivate) throws IOException {
         IOException lastError = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
-            HttpURLConnection connection = null;
             try {
                 throwIfPaused(pauseSignal);
-                connection = openSegmentConnection(url, allowPrivate);
-                try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
+                try (Response response = openSegmentResponse(url, allowPrivate)) {
+                    ResponseBody body = response.body();
+                    if (body == null) {
+                        throw new IOException("视频分片响应内容为空");
+                    }
+                    try (BufferedInputStream in = new BufferedInputStream(body.byteStream());
                      FileOutputStream out = new FileOutputStream(destination, false)) {
-                    byte[] buffer = new byte[8192];
-                    int count;
-                    while ((count = in.read(buffer)) != -1) {
-                        throwIfPaused(pauseSignal);
-                        out.write(buffer, 0, count);
+                        byte[] buffer = new byte[8192];
+                        int count;
+                        while ((count = in.read(buffer)) != -1) {
+                            throwIfPaused(pauseSignal);
+                            out.write(buffer, 0, count);
+                        }
                     }
                 }
                 return;
@@ -285,16 +290,12 @@ public class VideoDownloader {
                         throw new IOException("下载被中断", interrupted);
                     }
                 }
-            } finally {
-                if (connection != null) {
-                    connection.disconnect();
-                }
             }
         }
         throw lastError == null ? new IOException("视频分片下载失败") : lastError;
     }
 
-    private static HttpURLConnection openSegmentConnection(String url, boolean allowPrivate)
+    private static Response openSegmentResponse(String url, boolean allowPrivate)
             throws IOException {
         URI currentUri = parseDownloadUri(url);
         Set<URI> visited = new HashSet<>();
@@ -302,24 +303,22 @@ public class VideoDownloader {
         int redirectCount = 0;
 
         while (true) {
-            DownloadUrlPolicy.validate(currentUri, allowPrivate);
-            HttpURLConnection connection = (HttpURLConnection) currentUri.toURL().openConnection();
-            boolean keepConnection = false;
+            Response response = DownloadHttpClient.execute(currentUri, allowPrivate);
+            boolean keepResponse = false;
             try {
-                connection.setInstanceFollowRedirects(false);
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(30000);
-                int status = connection.getResponseCode();
+                int status = response.code();
                 if (!isRedirect(status)) {
-                    keepConnection = true;
-                    return connection;
+                    if (status != 200) {
+                        throw new IOException("视频分片请求失败，HTTP 状态码: " + status);
+                    }
+                    keepResponse = true;
+                    return response;
                 }
 
-                closeResponseBody(connection);
                 if (redirectCount >= MAX_SEGMENT_REDIRECTS) {
                     throw new IOException("视频分片重定向次数过多");
                 }
-                String location = connection.getHeaderField("Location");
+                String location = response.header("Location");
                 if (location == null || location.trim().isEmpty()) {
                     throw new IOException("视频分片重定向缺少 Location");
                 }
@@ -330,42 +329,25 @@ public class VideoDownloader {
                 } catch (IllegalArgumentException error) {
                     throw new IOException("视频分片重定向地址无效", error);
                 }
-                DownloadUrlPolicy.validate(nextUri, allowPrivate);
                 if (!visited.add(nextUri)) {
                     throw new IOException("视频分片重定向循环");
                 }
                 currentUri = nextUri;
                 redirectCount++;
             } finally {
-                if (!keepConnection) {
-                    connection.disconnect();
+                if (!keepResponse) {
+                    response.close();
                 }
             }
         }
     }
 
     private static boolean isRedirect(int status) {
-        return status == HttpURLConnection.HTTP_MOVED_PERM
-                || status == HttpURLConnection.HTTP_MOVED_TEMP
-                || status == HttpURLConnection.HTTP_SEE_OTHER
+        return status == 301
+                || status == 302
+                || status == 303
                 || status == 307
                 || status == 308;
-    }
-
-    private static void closeResponseBody(HttpURLConnection connection) {
-        InputStream stream = connection.getErrorStream();
-        if (stream == null) {
-            try {
-                stream = connection.getInputStream();
-            } catch (IOException ignored) {
-                return;
-            }
-        }
-        try {
-            stream.close();
-        } catch (IOException ignored) {
-            // The caller disconnects the connection immediately afterwards.
-        }
     }
 
     private static URI parseDownloadUri(String url) throws IOException {

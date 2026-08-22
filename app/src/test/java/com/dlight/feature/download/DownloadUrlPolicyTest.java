@@ -6,7 +6,9 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
+import java.util.List;
 
 public class DownloadUrlPolicyTest {
     @Test
@@ -52,6 +54,20 @@ public class DownloadUrlPolicyTest {
             fail("Expected IOException");
         } catch (IOException expected) {
             assertTrue(expected.getMessage().contains("主机"));
+        }
+    }
+
+    @Test
+    public void resolvedAllowedAddressesAreImmutable() throws Exception {
+        List<InetAddress> addresses = DownloadUrlPolicy.resolveAllowedAddresses(
+                URI.create("https://8.8.8.8/video.ts"), false);
+
+        assertTrue(!addresses.isEmpty());
+        try {
+            addresses.clear();
+            fail("Expected immutable addresses");
+        } catch (UnsupportedOperationException expected) {
+            // Expected.
         }
     }
 
