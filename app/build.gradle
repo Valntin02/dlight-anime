@@ -7,12 +7,12 @@ def containsControlCharacter = { String value ->
     value != null && value.toCharArray().any { Character.isISOControl(it as char) }
 }
 def quoteBuildConfig = { String value ->
-    if (containsControlCharacter(value)) {
-        throw new GradleException("BuildConfig values must not contain control characters")
-    }
-    '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    '"' + value.replace('\\', '\\\\')
+        .replace('"', '\\"')
+        .replace('\r', '\\r')
+        .replace('\n', '\\n') + '"'
 }
-def validateApiBaseUrl = { String propertyName, String rawValue ->
+def validateApiBaseUrl = { String rawValue, String propertyName ->
     if (rawValue == null || rawValue.trim().isEmpty()) {
         throw new GradleException("Set -P${propertyName}=https://host/ for this build")
     }
@@ -39,12 +39,9 @@ def validateApiBaseUrl = { String propertyName, String rawValue ->
     }
     value
 }
-def debugApiBaseUrl = validateApiBaseUrl(
-    "DLIGHT_DEBUG_API_BASE_URL",
-    providers.gradleProperty("DLIGHT_DEBUG_API_BASE_URL")
+def debugApiBaseUrl = providers.gradleProperty("DLIGHT_DEBUG_API_BASE_URL")
     .orElse("http://10.0.2.2:8000/")
     .get()
-)
 def releaseApiBaseUrl = providers.gradleProperty("DLIGHT_RELEASE_API_BASE_URL")
     .orElse("")
     .get()
@@ -101,7 +98,13 @@ android {
 
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     doFirst {
-        validateApiBaseUrl("DLIGHT_RELEASE_API_BASE_URL", releaseApiBaseUrl)
+        validateApiBaseUrl(releaseApiBaseUrl, "DLIGHT_RELEASE_API_BASE_URL")
+    }
+}
+
+tasks.matching { it.name == "preDebugBuild" }.configureEach {
+    doFirst {
+        validateApiBaseUrl(debugApiBaseUrl, "DLIGHT_DEBUG_API_BASE_URL")
     }
 }
 
