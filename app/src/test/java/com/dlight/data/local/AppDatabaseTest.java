@@ -9,6 +9,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
+import android.database.sqlite.SQLiteDatabase;
 
 import androidx.room.Room;
 
@@ -159,6 +160,33 @@ public class AppDatabaseTest {
     }
 
     @Test
+    public void emptyLegacyTableMissingRequiredColumnLeavesCanonicalUnchangedAndCanRetry()
+            throws Exception {
+        createCanonicalDatabase(
+            playRecord(30, 300, "canonical play"), starRecord(31, 310, "canonical star"));
+        createLegacyDatabaseWithEmptyStarTableMissingSyncedColumn();
+
+        try {
+            inBackground(() -> AppDatabase.getInstancePlayRecord(context));
+            fail("Expected incomplete legacy schema to fail import");
+        } catch (ExecutionException expected) {
+            assertFalse(importCompleted());
+        }
+
+        AppDatabase.resetInstanceForTests();
+        assertCanonicalRecordCounts(1, 1);
+        assertTrue(context.deleteDatabase(AppDatabase.LEGACY_DB_NAME));
+        createLegacyDatabase(
+            playRecord(20, 200, "retry play"), starRecord(21, 210, "retry star"));
+
+        AppDatabase canonical = inBackground(() -> AppDatabase.getInstancePlayRecord(context));
+
+        assertEquals(2, (int) inBackground(() -> canonical.playRecordDao().getAllPlayRecords().size()));
+        assertEquals(2, (int) inBackground(() -> canonical.myStarRecordDao().getAllStarRecords().size()));
+        assertTrue(importCompleted());
+    }
+
+    @Test
     public void successfulImportLeavesLegacyDatabaseBytesUnchanged() throws Exception {
         createLegacyDatabase(playRecord(10, 100, "preserved"), starRecord(11, 110, "preserved"));
         File legacyFile = context.getDatabasePath(AppDatabase.LEGACY_DB_NAME);
@@ -218,6 +246,47 @@ public class AppDatabaseTest {
                 }
             } finally {
                 database.close();
+            }
+            return null;
+        });
+    }
+
+    private void createLegacyDatabaseWithEmptyStarTableMissingSyncedColumn() throws Exception {
+        inBackground(() -> {
+            File legacyFile = context.getDatabasePath(AppDatabase.LEGACY_DB_NAME);
+            assertTrue(legacyFile.getParentFile().mkdirs() || legacyFile.getParentFile().isDirectory());
+            SQLiteDatabase database = SQLiteDatabase.openOrCreateDatabase(legacyFile, null);
+            try {
+                database.execSQL("CREATE TABLE play_records ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    + "userId INTEGER NOT NULL, vod_id INTEGER NOT NULL, "
+                    + "vod_name TEXT, vod_pic TEXT, vod_play_url TEXT, vod_actor TEXT, "
+                    + "vod_remarks TEXT, vod_year TEXT, vod_content TEXT, vod_total TEXT, "
+                    + "episodeIndex INTEGER NOT NULL, isSynced INTEGER NOT NULL)");
+                database.execSQL("INSERT INTO play_records "
+                    + "(userId, vod_id, vod_name, episodeIndex, isSynced) "
+                    + "VALUES (20, 200, 'legacy pending play', 3, 0)");
+                database.execSQL("CREATE TABLE myStar_records ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    + "userId INTEGER NOT NULL, vod_id INTEGER NOT NULL, "
+                    + "vod_name TEXT, vod_pic TEXT, vod_play_url TEXT, vod_actor TEXT, "
+                    + "vod_remarks TEXT, vod_year TEXT, vod_content TEXT, vod_total TEXT)");
+            } finally {
+                database.close();
+            }
+            return null;
+        });
+    }
+
+    private void assertCanonicalRecordCounts(int playCount, int starCount) throws Exception {
+        inBackground(() -> {
+            AppDatabase canonical = Room.databaseBuilder(
+                context, AppDatabase.class, AppDatabase.CANONICAL_DB_NAME).build();
+            try {
+                assertEquals(playCount, canonical.playRecordDao().getAllPlayRecords().size());
+                assertEquals(starCount, canonical.myStarRecordDao().getAllStarRecords().size());
+            } finally {
+                canonical.close();
             }
             return null;
         });

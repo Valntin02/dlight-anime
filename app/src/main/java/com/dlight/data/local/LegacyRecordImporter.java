@@ -87,6 +87,12 @@ final class LegacyRecordImporter {
 
     private static void importPlayRecords(SQLiteDatabase legacy, AppDatabase canonical) {
         try (Cursor cursor = legacy.query("play_records", null, null, null, null, null, null)) {
+            requireColumns(
+                cursor,
+                "id", "userId", "vod_id", "vod_name", "vod_pic", "vod_play_url",
+                "vod_actor", "vod_remarks", "vod_year", "vod_content", "vod_total",
+                "episodeIndex", "isSynced"
+            );
             while (cursor.moveToNext()) {
                 int userId = getInt(cursor, "userId");
                 int vodId = getInt(cursor, "vod_id");
@@ -115,6 +121,11 @@ final class LegacyRecordImporter {
 
     private static void importStarRecords(SQLiteDatabase legacy, AppDatabase canonical) {
         try (Cursor cursor = legacy.query("myStar_records", null, null, null, null, null, null)) {
+            requireColumns(
+                cursor,
+                "id", "userId", "vod_id", "vod_name", "vod_pic", "vod_play_url",
+                "vod_actor", "vod_remarks", "vod_year", "vod_content", "vod_total", "isSynced"
+            );
             while (cursor.moveToNext()) {
                 int userId = getInt(cursor, "userId");
                 int vodId = getInt(cursor, "vod_id");
@@ -137,6 +148,12 @@ final class LegacyRecordImporter {
                 record.setIsSynced(getInt(cursor, "isSynced") != 0);
                 canonical.myStarRecordDao().insert(record);
             }
+        }
+    }
+
+    private static void requireColumns(Cursor cursor, String... columnNames) {
+        for (String columnName : columnNames) {
+            cursor.getColumnIndexOrThrow(columnName);
         }
     }
 
