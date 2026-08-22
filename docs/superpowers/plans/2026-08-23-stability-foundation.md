@@ -430,7 +430,7 @@ Expected: compilation fails because `ImageUrlResolver` does not exist.
 
 - [ ] **Step 3: Implement ImageUrlResolver**
 
-Use `java.net.URI`; preserve `file`, `content`, and `android.resource` values, leave ordinary absolute HTTP(S) hosts unchanged, replace only `127.0.0.1`, `localhost`, and `0.0.0.0` with the base scheme/authority, and resolve relative paths against `NetworkConfig.apiBaseUrl()`. Invalid values return `null` instead of throwing into RecyclerView binding.
+Use `java.net.URI`; normalize supported schemes to lowercase; preserve hierarchical `file`, `content`, and `android.resource` values; leave ordinary absolute HTTP(S) hosts unchanged; replace only `127.0.0.1`, `localhost`, and `0.0.0.0` with the base scheme/authority; and resolve relative paths against `NetworkConfig.apiBaseUrl()`. Re-run HTTP host policy after resolving scheme-relative URLs. Reject HTTP(S) user info and opaque unsupported forms so credentials cannot enter Glide models. Invalid values return `null` instead of throwing into RecyclerView binding.
 
 The public surface is exactly:
 
