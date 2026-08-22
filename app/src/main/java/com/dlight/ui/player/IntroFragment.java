@@ -20,7 +20,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -59,9 +58,6 @@ public class IntroFragment extends Fragment {
     private ImageView imageView;
 
     private Button btnStar,btnDownLoader;
-    private View downloadProgressContainer;
-    private ProgressBar downloadProgress;
-    private TextView downloadStatus;
     private boolean downloadReceiverRegistered;
     private int currentPlayingIndex = 0; // 当前正在播放的索引
 
@@ -101,9 +97,6 @@ public class IntroFragment extends Fragment {
         imageView=view.findViewById(R.id.videoImage);
         btnStar=view.findViewById(R.id.btn_star);
         btnDownLoader=view.findViewById(R.id.btn_downloader);
-        downloadProgressContainer = view.findViewById(R.id.download_progress_container);
-        downloadProgress = view.findViewById(R.id.download_progress);
-        downloadStatus = view.findViewById(R.id.download_status);
         currentPlayingIndex = Math.max(0, currentEpisode - 1);
         if(videoData!=null){
             String str;
@@ -188,9 +181,7 @@ public class IntroFragment extends Fragment {
             intent.putExtra(DownloadContract.EXTRA_PIC_URL, videoData.getVod_pic());
             ContextCompat.startForegroundService(requireContext(), intent);
             btnDownLoader.setEnabled(false);
-            downloadProgressContainer.setVisibility(View.VISIBLE);
-            downloadProgress.setIndeterminate(true);
-            downloadStatus.setText("正在加入下载队列…");
+            btnDownLoader.setText("等待中");
             Log.d("bingBtnDownLoader", "开始下载任务: " + taskId);
 
         });
@@ -205,34 +196,26 @@ public class IntroFragment extends Fragment {
     }
 
     private void refreshDownloadState() {
-        if (videoData == null || downloadProgressContainer == null) {
+        if (videoData == null || btnDownLoader == null) {
             return;
         }
         DownloadTask task = DownloadTaskStore.get(requireContext(), getCurrentTaskId());
         if (task == null) {
-            downloadProgressContainer.setVisibility(View.GONE);
             btnDownLoader.setEnabled(true);
             btnDownLoader.setText("下载");
             return;
         }
 
-        downloadProgressContainer.setVisibility(View.VISIBLE);
-        downloadProgress.setIndeterminate(DownloadContract.STATUS_QUEUED.equals(task.getStatus()));
-        downloadProgress.setProgress(task.getProgress());
         if (DownloadContract.STATUS_QUEUED.equals(task.getStatus())) {
-            downloadStatus.setText("等待下载");
             btnDownLoader.setText("等待中");
             btnDownLoader.setEnabled(false);
         } else if (DownloadContract.STATUS_DOWNLOADING.equals(task.getStatus())) {
-            downloadStatus.setText("下载中 " + task.getProgress() + "%");
             btnDownLoader.setText(task.getProgress() + "%");
             btnDownLoader.setEnabled(false);
         } else if (DownloadContract.STATUS_COMPLETED.equals(task.getStatus())) {
-            downloadStatus.setText("已缓存");
             btnDownLoader.setText("已缓存");
             btnDownLoader.setEnabled(false);
         } else {
-            downloadStatus.setText("下载失败，点击重试");
             btnDownLoader.setText("重试");
             btnDownLoader.setEnabled(true);
         }
