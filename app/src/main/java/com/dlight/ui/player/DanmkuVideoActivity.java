@@ -15,9 +15,6 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.viewpager2.widget.ViewPager2;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.dlight.R;
 import com.dlight.data.model.VodData;
 import com.dlight.data.model.VodResModel;
@@ -131,7 +128,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         int safeEpisode = Math.max(1, Math.min(currentEpisode, videourls.size()));
         currentEpisode = safeEpisode;
         String playUrl = videourls.get(safeEpisode - 1);
-        if (!isValidPlayUrl(playUrl)) {
+        if (!PlaySourceSelector.isPlayableUrl(playUrl)) {
             Toast.makeText(this, "当前视频播放地址无效", Toast.LENGTH_SHORT).show();
             finish();
             return;
@@ -368,152 +365,13 @@ private void getDanmu() {
         });
     }
 
-    private void dealVideourls(){
-        videourls = new ArrayList<>();
-
-        if (appendPreferredUrlsFromPlayData(videoData.getVodPlayData())) {
-            return;
-        }
-
-        String basePlayUrl = videoData.getVod_play_url();
-        if (isValidPlayUrl(basePlayUrl)) {
-            basePlayUrl = basePlayUrl.trim();
-            int episodeCount = parseEpisodeCount(videoData.getVod_remarks(), videoData.getVod_total());
-            if (basePlayUrl.matches(".*第\\d+集.*")) {
-                for (int i = 1; i <= episodeCount; i++) {
-                    String episodeStr = String.format("%02d", i);
-                    String videoUrl = basePlayUrl.replaceAll("第\\d+集", "第" + episodeStr + "集");
-                    videourls.add(videoUrl);
-                }
-            } else {
-                videourls.add(basePlayUrl);
-            }
-        } else {
-            Log.w("DanmkuVideoActivity", "vod_play_url is empty or invalid: " + basePlayUrl);
-        }
-
-    }
-
-    private boolean appendPreferredUrlsFromPlayData(JsonElement vodPlayData) {
-        if (vodPlayData == null || vodPlayData.isJsonNull()) {
-            return false;
-        }
-        if (vodPlayData.isJsonArray()) {
-            JsonArray sources = vodPlayData.getAsJsonArray();
-            JsonObject preferredSource = null;
-            int preferredPriority = Integer.MAX_VALUE;
-            for (JsonElement sourceElement : sources) {
-                if (sourceElement == null || !sourceElement.isJsonObject()) {
-                    continue;
-                }
-                JsonObject source = sourceElement.getAsJsonObject();
-                int priority = getSourcePriority(source);
-                if (priority < preferredPriority && hasPlayableEpisodes(source)) {
-                    preferredSource = source;
-                    preferredPriority = priority;
-                }
-            }
-            if (preferredSource != null) {
-                appendUrlsFromSource(preferredSource);
-            }
-            return !videourls.isEmpty();
-        }
-        if (vodPlayData.isJsonObject()) {
-            appendUrlsFromSource(vodPlayData);
-        }
-        return !videourls.isEmpty();
-    }
-
-    private int getSourcePriority(JsonObject source) {
-        String sourceName = getSourceName(source).toLowerCase();
-        if ("lzm3u8".equals(sourceName)) {
-            return 0;
-        }
-        if (sourceName.contains("m3u8") && !sourceName.contains("bfzy")) {
-            return 1;
-        }
-        if (sourceName.contains("bfzy")) {
-            return 3;
-        }
-        return 2;
-    }
-
-    private String getSourceName(JsonObject source) {
-        JsonElement from = source.get("from");
-        if (from != null && !from.isJsonNull()) {
-            return from.getAsString();
-        }
-        JsonElement label = source.get("label");
-        return label == null || label.isJsonNull() ? "" : label.getAsString();
-    }
-
-    private boolean hasPlayableEpisodes(JsonObject source) {
-        JsonElement episodes = source.get("episodes");
-        return episodes != null && episodes.isJsonArray() && episodes.getAsJsonArray().size() > 0;
-    }
-
-    private void appendUrlsFromSource(JsonElement sourceElement) {
-        if (sourceElement == null || !sourceElement.isJsonObject()) {
-            return;
-        }
-        JsonObject source = sourceElement.getAsJsonObject();
-        JsonElement episodesElement = source.get("episodes");
-        if (episodesElement == null || !episodesElement.isJsonArray()) {
-            return;
-        }
-
-        JsonArray episodes = episodesElement.getAsJsonArray();
-        for (JsonElement episodeElement : episodes) {
-            if (episodeElement == null || !episodeElement.isJsonObject()) {
-                continue;
-            }
-            JsonObject episode = episodeElement.getAsJsonObject();
-            JsonElement urlElement = episode.get("url");
-            if (urlElement == null || urlElement.isJsonNull()) {
-                continue;
-            }
-            String url = urlElement.getAsString();
-            if (isValidPlayUrl(url)) {
-                videourls.add(url.trim());
-            }
-        }
-    }
-
-    private boolean isValidPlayUrl(String url) {
-        if (TextUtils.isEmpty(url)) {
-            return false;
-        }
-        String trimmed = url.trim();
-        return !trimmed.isEmpty()
-            && !"null".equalsIgnoreCase(trimmed)
-            && !"undefined".equalsIgnoreCase(trimmed);
-    }
-
-    private int parseEpisodeCount(String remarks, String total) {
-        int fromRemarks = extractPositiveNumber(remarks);
-        if (fromRemarks > 0) {
-            return fromRemarks;
-        }
-        int fromTotal = extractPositiveNumber(total);
-        if (fromTotal > 0) {
-            return fromTotal;
-        }
-        return 1;
-    }
-
-    private int extractPositiveNumber(String text) {
-        if (TextUtils.isEmpty(text)) {
-            return 0;
-        }
-        String numberStr = text.replaceAll("[^0-9]", "");
-        if (TextUtils.isEmpty(numberStr)) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(numberStr);
-        } catch (NumberFormatException e) {
-            return 0;
-        }
+    private void dealVideourls() {
+        videourls = new ArrayList<>(PlaySourceSelector.selectUrls(
+            videoData.getVodPlayData(),
+            videoData.getVod_play_url(),
+            videoData.getVod_remarks(),
+            videoData.getVod_total()
+        ));
     }
     private void resolveNormalVideoUI() {
         //增加title
