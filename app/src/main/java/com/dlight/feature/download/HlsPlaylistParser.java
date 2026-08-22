@@ -14,10 +14,6 @@ public final class HlsPlaylistParser {
     private static final Pattern BANDWIDTH_PATTERN = Pattern.compile(
             "(?:^|,)\\s*BANDWIDTH\\s*=\\s*(\\d+)\\s*(?:,|$)",
             Pattern.CASE_INSENSITIVE);
-    private static final Pattern KEY_METHOD_PATTERN = Pattern.compile(
-            "(?:^|,)\\s*METHOD\\s*=\\s*([^,\\s]+)",
-            Pattern.CASE_INSENSITIVE);
-
     private HlsPlaylistParser() {
     }
 
@@ -112,8 +108,50 @@ public final class HlsPlaylistParser {
         if (colon < 0) {
             return false;
         }
-        Matcher matcher = KEY_METHOD_PATTERN.matcher(keyLine.substring(colon + 1));
-        return matcher.find() && "NONE".equalsIgnoreCase(matcher.group(1));
+        String method = findAttributeValue(keyLine.substring(colon + 1), "METHOD");
+        return "NONE".equalsIgnoreCase(method);
+    }
+
+    private static String findAttributeValue(String attributes, String targetKey) {
+        StringBuilder token = new StringBuilder();
+        boolean inQuotes = false;
+        boolean escaped = false;
+
+        for (int index = 0; index < attributes.length(); index++) {
+            char character = attributes.charAt(index);
+            if (character == ',' && !inQuotes) {
+                String value = valueIfMatchingToken(token.toString(), targetKey);
+                if (value != null) {
+                    return value;
+                }
+                token.setLength(0);
+                continue;
+            }
+
+            token.append(character);
+            if (escaped) {
+                escaped = false;
+            } else if (inQuotes && character == '\\') {
+                escaped = true;
+            } else if (character == '"') {
+                inQuotes = !inQuotes;
+            }
+        }
+        return valueIfMatchingToken(token.toString(), targetKey);
+    }
+
+    private static String valueIfMatchingToken(String token, String targetKey) {
+        int equals = token.indexOf('=');
+        if (equals < 0 || !targetKey.equalsIgnoreCase(token.substring(0, equals).trim())) {
+            return null;
+        }
+
+        String value = token.substring(equals + 1).trim();
+        if (value.length() >= 2 && value.charAt(0) == '"'
+                && value.charAt(value.length() - 1) == '"') {
+            value = value.substring(1, value.length() - 1).trim();
+        }
+        return value;
     }
 
     private static String resolveUri(URI baseUri, String value) throws IOException {
