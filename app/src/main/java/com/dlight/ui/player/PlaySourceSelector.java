@@ -10,8 +10,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class PlaySourceSelector {
+    private static final int MAX_EPISODE_COUNT = 2000;
+    private static final Pattern EPISODE_COUNT_PATTERN = Pattern.compile("(\\d+)(?:集|话|期)");
+    private static final Pattern PURE_NUMBER_PATTERN = Pattern.compile("\\d+");
+
     private PlaySourceSelector() {
     }
 
@@ -72,11 +78,11 @@ public final class PlaySourceSelector {
     }
 
     static int parseEpisodeCount(String remarks, String total) {
-        int fromRemarks = extractPositiveNumber(remarks);
+        int fromRemarks = extractEpisodeCount(remarks);
         if (fromRemarks > 0) {
             return fromRemarks;
         }
-        int fromTotal = extractPositiveNumber(total);
+        int fromTotal = extractEpisodeCount(total);
         return fromTotal > 0 ? fromTotal : 1;
     }
 
@@ -148,16 +154,28 @@ public final class PlaySourceSelector {
         return label != null && label.isJsonPrimitive() ? label.getAsString() : "";
     }
 
-    private static int extractPositiveNumber(String text) {
-        if (text == null || text.isEmpty()) {
+    private static int extractEpisodeCount(String text) {
+        if (text == null) {
             return 0;
         }
-        String number = text.replaceAll("[^0-9]", "");
-        if (number.isEmpty()) {
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
             return 0;
         }
+
+        Matcher matcher = EPISODE_COUNT_PATTERN.matcher(trimmed);
+        String number;
+        if (matcher.find()) {
+            number = matcher.group(1);
+        } else if (PURE_NUMBER_PATTERN.matcher(trimmed).matches()) {
+            number = trimmed;
+        } else {
+            return 0;
+        }
+
         try {
-            return Integer.parseInt(number);
+            int count = Integer.parseInt(number);
+            return count > 0 ? Math.min(count, MAX_EPISODE_COUNT) : 0;
         } catch (NumberFormatException e) {
             return 0;
         }

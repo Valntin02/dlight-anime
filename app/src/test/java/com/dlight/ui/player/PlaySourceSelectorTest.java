@@ -207,10 +207,50 @@ public class PlaySourceSelectorTest {
     }
 
     @Test
-    public void parseEpisodeCount_usesFirstPositiveCount() {
-        assertEquals(12, PlaySourceSelector.parseEpisodeCount("更新至12集", "24"));
-        assertEquals(24, PlaySourceSelector.parseEpisodeCount("完结", "共24集"));
+    public void parseEpisodeCount_extractsEpisodeUnitWithoutJoiningOtherNumbers() {
+        assertEquals(
+            12,
+            PlaySourceSelector.parseEpisodeCount("更新至12集（2026-08-23）", "24")
+        );
+        assertEquals(12, PlaySourceSelector.parseEpisodeCount("第2季 更新至12集", "24"));
+        assertEquals(8, PlaySourceSelector.parseEpisodeCount("更新至8话", "24"));
+        assertEquals(6, PlaySourceSelector.parseEpisodeCount("全6期", "24"));
+    }
+
+    @Test
+    public void parseEpisodeCount_acceptsPureNumericTotal() {
+        assertEquals(24, PlaySourceSelector.parseEpisodeCount("完结", " 24 "));
         assertEquals(1, PlaySourceSelector.parseEpisodeCount(null, "0"));
+    }
+
+    @Test
+    public void parseEpisodeCount_clampsLargePositiveCount() {
+        assertEquals(2000, PlaySourceSelector.parseEpisodeCount("更新至999999集", "24"));
+
+        List<String> urls = PlaySourceSelector.selectUrls(
+            null,
+            "https://legacy.example.com/第01集.mp4",
+            "999999集",
+            null
+        );
+
+        assertEquals(2000, urls.size());
+        assertEquals("https://legacy.example.com/第2000集.mp4", urls.get(1999));
+    }
+
+    @Test
+    public void parseEpisodeCount_fallsBackAfterOverflow() {
+        assertEquals(
+            18,
+            PlaySourceSelector.parseEpisodeCount(
+                "更新至999999999999999999999999集",
+                "18"
+            )
+        );
+        assertEquals(
+            1,
+            PlaySourceSelector.parseEpisodeCount(null, "999999999999999999999999")
+        );
     }
 
     private static JsonElement json(String value) {
