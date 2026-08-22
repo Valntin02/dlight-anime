@@ -52,7 +52,7 @@ public VodData toVodData() {
 
 Do not throw for old or malformed persisted JSON.
 
-The new field is local persistence only. `ApiGsonFactory` must configure matching serialization and deserialization exclusion strategies for `vod_play_data` declared by `PlayRecord` and `MyStarRecord`, and `RetrofitClient` must use that Gson instance. Tests must prove sync JSON omits the field and backend array/object/string values under that key are ignored without changing other fields.
+The new field is local persistence only. Mark it with a runtime `@LocalOnly` field annotation. `ApiGsonFactory` must configure matching serialization and deserialization exclusion strategies by annotation rather than Java field name, and `RetrofitClient` must use that Gson instance. Preserve runtime annotation attributes through R8 in `proguard-rules.pro`; fields may still be obfuscated. Tests must prove sync JSON omits the field and backend array/object/string values under that key are ignored without changing other fields.
 
 - [ ] **Step 3: Run focused/full tests and commit**
 
