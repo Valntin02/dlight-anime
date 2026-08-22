@@ -5,6 +5,7 @@ import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 import com.dlight.data.model.VodData;
+import com.google.gson.JsonParser;
 
 @Entity(
     tableName = "play_records",
@@ -20,6 +21,7 @@ public class PlayRecord {
     private String vod_name;
     private String vod_pic;
     private String vod_play_url;
+    private String vod_play_data;
     private String vod_actor;
     private String vod_remarks;
     private String vod_year;
@@ -40,6 +42,8 @@ public class PlayRecord {
         this.vod_name = data.getVod_name();
         this.vod_pic = data.getVod_pic();
         this.vod_play_url = data.getVod_play_url();
+        this.vod_play_data = data.getVodPlayData() == null
+            ? null : data.getVodPlayData().toString();
         this.vod_actor = data.getVod_actor();
         this.vod_remarks = data.getVod_remarks();
         this.vod_year = data.getVod_year();
@@ -69,6 +73,9 @@ public class PlayRecord {
     public String getVod_play_url() { return vod_play_url; }
     public void setVod_play_url(String vod_play_url) { this.vod_play_url = vod_play_url; }
 
+    public String getVod_play_data() { return vod_play_data; }
+    public void setVod_play_data(String vod_play_data) { this.vod_play_data = vod_play_data; }
+
     public String getVod_actor() { return vod_actor; }
     public void setVod_actor(String vod_actor) { this.vod_actor = vod_actor; }
 
@@ -86,4 +93,19 @@ public class PlayRecord {
 
     public int getEpisodeIndex() { return episodeIndex; }
     public void setEpisodeIndex(int episodeIndex) { this.episodeIndex = episodeIndex; }
+
+    public VodData toVodData() {
+        VodData data = new VodData(
+            vod_id, vod_name, vod_pic, vod_play_url, vod_actor,
+            vod_remarks, vod_year, vod_content, vod_total
+        );
+        if (vod_play_data != null && !vod_play_data.trim().isEmpty()) {
+            try {
+                data.setVodPlayData(new JsonParser().parse(vod_play_data));
+            } catch (RuntimeException ignored) {
+                data.setVodPlayData(null);
+            }
+        }
+        return data;
+    }
 }
