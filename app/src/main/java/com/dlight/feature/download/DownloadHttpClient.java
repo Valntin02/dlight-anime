@@ -73,7 +73,7 @@ final class DownloadHttpClient {
         OkHttpClient.Builder builder = BASE_CLIENT.newBuilder()
                 .dns(pinnedDns)
                 .readTimeout(purpose.readTimeoutSeconds, TimeUnit.SECONDS)
-                .connectionPool(new ConnectionPool());
+                .connectionPool(new ConnectionPool(0, 1, TimeUnit.NANOSECONDS));
         if (!allowPrivate) {
             builder.proxy(Proxy.NO_PROXY);
         }
