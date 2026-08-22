@@ -240,6 +240,25 @@ public class VideoDownloaderFileTest {
     }
 
     @Test
+    public void schedulingPreparationClearsAllMissingPartsBeforeFailureShortCircuit()
+            throws Exception {
+        File tempDirectory = temporaryFolder.newFolder("segments");
+        File completed = new File(tempDirectory, "0.ts");
+        write(completed, "verified");
+        File firstMissingPart = new File(tempDirectory, "1.ts.part");
+        File secondMissingPart = new File(tempDirectory, "2.ts.part");
+        write(firstMissingPart, "stale-one");
+        write(secondMissingPart, "stale-two");
+
+        List<Integer> missing = VideoDownloader.prepareMissingSegments(tempDirectory, 3);
+
+        assertEquals(Arrays.asList(1, 2), missing);
+        assertFalse(firstMissingPart.exists());
+        assertFalse(secondMissingPart.exists());
+        assertArrayEquals(bytes("verified"), Files.readAllBytes(completed.toPath()));
+    }
+
+    @Test
     public void ordinaryTaskFailurePreservesVerifiedSegmentsForRetry() throws Exception {
         JdkHttpServer server = newServer();
         AtomicInteger existingRequests = new AtomicInteger();

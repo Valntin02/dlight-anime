@@ -168,7 +168,8 @@ public class VideoDownloader {
 
             final File taskTempDir = videoTempDir;
             int totalTsFiles = tsUrls.size();
-            List<Integer> missingSegments = findMissingSegments(taskTempDir, totalTsFiles);
+            List<Integer> missingSegments = prepareMissingSegments(
+                    taskTempDir, totalTsFiles);
             int existingSegments = totalTsFiles - missingSegments.size();
             CountDownLatch latch = new CountDownLatch(missingSegments.size());
             AtomicInteger completedFiles = new AtomicInteger(existingSegments);
@@ -327,6 +328,16 @@ public class VideoDownloader {
             if (!segment.exists() || segment.length() <= 0) {
                 missingSegments.add(i);
             }
+        }
+        return missingSegments;
+    }
+
+    static List<Integer> prepareMissingSegments(File tempDirectory, int totalSegments)
+            throws IOException {
+        List<Integer> missingSegments = findMissingSegments(tempDirectory, totalSegments);
+        for (int index : missingSegments) {
+            File destination = new File(tempDirectory, index + ".ts");
+            deleteIfExists(segmentPartFile(destination));
         }
         return missingSegments;
     }
