@@ -10,12 +10,24 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import okhttp3.ConnectionPool;
 import okhttp3.Dns;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 
 final class DownloadHttpClient {
+    enum Purpose {
+        PLAYLIST(15),
+        SEGMENT(30);
+
+        private final int readTimeoutSeconds;
+
+        Purpose(int readTimeoutSeconds) {
+            this.readTimeoutSeconds = readTimeoutSeconds;
+        }
+    }
+
     interface AddressResolver {
         List<InetAddress> resolve(URI uri, boolean allowPrivate) throws IOException;
     }
@@ -32,14 +44,14 @@ final class DownloadHttpClient {
     private DownloadHttpClient() {
     }
 
-    static Response execute(URI uri, boolean allowPrivate) throws IOException {
-        OkHttpClient client = clientFor(uri, allowPrivate, POLICY_RESOLVER);
+    static Response execute(URI uri, boolean allowPrivate, Purpose purpose) throws IOException {
+        OkHttpClient client = clientFor(uri, allowPrivate, purpose, POLICY_RESOLVER);
         Request request = new Request.Builder().url(uri.toString()).build();
         return client.newCall(request).execute();
     }
 
-    static OkHttpClient clientFor(URI uri, boolean allowPrivate, AddressResolver resolver)
-            throws IOException {
+    static OkHttpClient clientFor(URI uri, boolean allowPrivate, Purpose purpose,
+            AddressResolver resolver) throws IOException {
         final String expectedHost = uri.getHost();
         final List<InetAddress> resolved = resolver.resolve(uri, allowPrivate);
         if (expectedHost == null || expectedHost.isEmpty() || resolved == null
@@ -58,7 +70,10 @@ final class DownloadHttpClient {
                 return pinned;
             }
         };
-        OkHttpClient.Builder builder = BASE_CLIENT.newBuilder().dns(pinnedDns);
+        OkHttpClient.Builder builder = BASE_CLIENT.newBuilder()
+                .dns(pinnedDns)
+                .readTimeout(purpose.readTimeoutSeconds, TimeUnit.SECONDS)
+                .connectionPool(new ConnectionPool());
         if (!allowPrivate) {
             builder.proxy(Proxy.NO_PROXY);
         }

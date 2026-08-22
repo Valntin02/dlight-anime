@@ -303,7 +303,8 @@ public class VideoDownloader {
         int redirectCount = 0;
 
         while (true) {
-            Response response = DownloadHttpClient.execute(currentUri, allowPrivate);
+            Response response = DownloadHttpClient.execute(currentUri, allowPrivate,
+                    DownloadHttpClient.Purpose.SEGMENT);
             boolean keepResponse = false;
             try {
                 int status = response.code();

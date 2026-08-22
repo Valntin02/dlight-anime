@@ -40,9 +40,6 @@ public final class HlsPlaylistResolver {
                 fetched.getContent(), fetched.getFinalUri());
 
         if (!result.getSegments().isEmpty()) {
-            for (String segment : result.getSegments()) {
-                DownloadUrlPolicy.validate(toUri(segment), allowPrivate);
-            }
             return Collections.unmodifiableList(new ArrayList<>(result.getSegments()));
         }
         if (!result.getVariants().isEmpty()) {
@@ -68,7 +65,8 @@ public final class HlsPlaylistResolver {
         int redirectCount = 0;
 
         while (true) {
-            try (Response response = DownloadHttpClient.execute(currentUri, allowPrivate)) {
+            try (Response response = DownloadHttpClient.execute(currentUri, allowPrivate,
+                    DownloadHttpClient.Purpose.PLAYLIST)) {
                 int status = response.code();
                 if (isRedirect(status)) {
                     if (redirectCount >= MAX_REDIRECTS) {

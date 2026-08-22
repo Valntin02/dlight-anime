@@ -2,6 +2,7 @@ package com.dlight.feature.download;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
@@ -38,7 +39,8 @@ public class DownloadHttpClientTest {
                 };
 
         OkHttpClient client = DownloadHttpClient.clientFor(
-                URI.create("https://media.example.test/playlist.m3u8"), false, resolver);
+                URI.create("https://media.example.test/playlist.m3u8"), false,
+                DownloadHttpClient.Purpose.PLAYLIST, resolver);
         resolved.clear();
 
         assertEquals(Collections.singletonList(
@@ -65,8 +67,10 @@ public class DownloadHttpClientTest {
                     }
                 };
         OkHttpClient client = DownloadHttpClient.clientFor(
-                URI.create("http://expected.example.test/video.ts"), true, resolver);
+                URI.create("http://expected.example.test/video.ts"), true,
+                DownloadHttpClient.Purpose.SEGMENT, resolver);
         assertNull(client.proxy());
+        assertEquals(30_000L, client.readTimeoutMillis());
 
         try {
             client.dns().lookup("other.example.test");
@@ -76,5 +80,25 @@ public class DownloadHttpClientTest {
         }
         client.dns().lookup("EXPECTED.EXAMPLE.TEST");
         assertEquals(1, resolutions.get());
+    }
+
+    @Test
+    public void eachPinnedClientHasAnIsolatedConnectionPool() throws Exception {
+        DownloadHttpClient.AddressResolver resolver =
+                new DownloadHttpClient.AddressResolver() {
+                    @Override
+                    public List<InetAddress> resolve(URI uri, boolean allowPrivate) {
+                        return Collections.singletonList(InetAddress.getLoopbackAddress());
+                    }
+                };
+
+        OkHttpClient first = DownloadHttpClient.clientFor(
+                URI.create("http://expected.example.test/one"), true,
+                DownloadHttpClient.Purpose.PLAYLIST, resolver);
+        OkHttpClient second = DownloadHttpClient.clientFor(
+                URI.create("http://expected.example.test/two"), true,
+                DownloadHttpClient.Purpose.PLAYLIST, resolver);
+
+        assertNotSame(first.connectionPool(), second.connectionPool());
     }
 }
