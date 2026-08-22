@@ -63,4 +63,37 @@ public class ApiGsonFactoryTest {
             assertEquals("legacy-url", star.getVod_play_url());
         }
     }
+
+    @Test
+    public void recordLocalPersistenceFieldsCarryRuntimeAnnotation() throws Exception {
+        assertTrue(PlayRecord.class.getDeclaredField("vod_play_data")
+            .isAnnotationPresent(LocalOnly.class));
+        assertTrue(MyStarRecord.class.getDeclaredField("vod_play_data")
+            .isAnnotationPresent(LocalOnly.class));
+    }
+
+    @Test
+    public void factoryExcludesAnyAnnotatedFieldWithoutDependingOnItsName() {
+        Gson gson = ApiGsonFactory.create();
+        AnnotatedFixture fixture = new AnnotatedFixture();
+        fixture.renamedLocalValue = "local";
+
+        String json = gson.toJson(fixture);
+        AnnotatedFixture restored = gson.fromJson(
+            "{\"remoteValue\":\"backend\",\"renamedLocalValue\":\"backend-local\"}",
+            AnnotatedFixture.class
+        );
+
+        assertTrue(json.contains("\"remoteValue\":\"remote\""));
+        assertFalse(json.contains("renamedLocalValue"));
+        assertEquals("backend", restored.remoteValue);
+        assertNull(restored.renamedLocalValue);
+    }
+
+    private static final class AnnotatedFixture {
+        String remoteValue = "remote";
+
+        @LocalOnly
+        String renamedLocalValue;
+    }
 }

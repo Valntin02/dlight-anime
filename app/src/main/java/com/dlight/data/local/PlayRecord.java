@@ -5,6 +5,7 @@ import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
 import com.dlight.data.model.VodData;
+import com.dlight.network.LocalOnly;
 import com.google.gson.JsonParser;
 
 @Entity(
@@ -21,6 +22,7 @@ public class PlayRecord {
     private String vod_name;
     private String vod_pic;
     private String vod_play_url;
+    @LocalOnly
     private String vod_play_data;
     private String vod_actor;
     private String vod_remarks;

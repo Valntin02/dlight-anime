@@ -30,6 +30,8 @@
 -ignorewarnings
 #-ignorewarnings
 -keepattributes *Annotation*
+-keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations
+-keep @interface com.dlight.network.LocalOnly
 -keepattributes Signature
 -keepattributes SourceFile,LineNumberTable
 -keepattributes Exceptions,InnerClasses,Deprecated,LocalVariable*Table,Synthetic,EnclosingMethod
