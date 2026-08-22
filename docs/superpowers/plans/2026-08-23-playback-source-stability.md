@@ -43,7 +43,7 @@ Add tests for:
 - Episode order is preserved and surrounding whitespace is trimmed.
 - Ordinary HTTPS and Debug HTTP URLs are accepted; missing host, ftp, javascript, blank, `null`, and `undefined` are rejected.
 - When no structured source is playable, legacy `vod_play_url` is used.
-- A legacy URL containing `第01集` expands to the count from remarks, then total, then one.
+- A legacy URL containing `第01集` expands to the count from remarks, then total, then one. Episode metadata extracts one number adjacent to `集`/`话`/`期` (or an all-digit total) and clamps expansion to 2,000 URLs so dates and malformed large values cannot cause OOM.
 - Invalid structured and legacy values produce an empty list.
 
 - [ ] **Step 2: Run the test and verify the red state**
