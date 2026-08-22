@@ -24,25 +24,35 @@ public final class ImageUrlResolver {
 
         try {
             URI imageUri = URI.create(raw.trim());
-            String scheme = imageUri.getScheme();
-            if (scheme == null) {
-                URI baseUri = validBaseUri(base);
-                return baseUri == null ? null : baseUri.resolve(imageUri).toString();
+            URI baseUri = null;
+            if (!imageUri.isAbsolute()) {
+                baseUri = validBaseUri(base);
+                if (baseUri == null) {
+                    return null;
+                }
+                imageUri = baseUri.resolve(imageUri);
             }
 
+            String scheme = imageUri.getScheme();
+            if (scheme == null) {
+                return null;
+            }
             String normalizedScheme = scheme.toLowerCase(Locale.ROOT);
-            if (!isSupportedScheme(normalizedScheme)) {
+            if (!isSupportedScheme(normalizedScheme) || imageUri.isOpaque()) {
                 return null;
             }
             boolean isHttp = "http".equals(normalizedScheme) || "https".equals(normalizedScheme);
-            if (isHttp && (imageUri.getHost() == null || !hasValidPort(imageUri))) {
+            if (isHttp && (imageUri.getRawUserInfo() != null
+                || imageUri.getHost() == null || !hasValidPort(imageUri))) {
                 return null;
             }
             if (isHttp && isLoopback(imageUri.getHost())) {
-                URI baseUri = validBaseUri(base);
+                if (baseUri == null) {
+                    baseUri = validBaseUri(base);
+                }
                 return baseUri == null ? null : replaceOrigin(imageUri, baseUri);
             }
-            return imageUri.toString();
+            return withLowercaseScheme(imageUri, normalizedScheme);
         } catch (IllegalArgumentException error) {
             return null;
         }
@@ -54,7 +64,8 @@ public final class ImageUrlResolver {
         }
         URI baseUri = URI.create(base);
         String scheme = baseUri.getScheme();
-        if (scheme == null || baseUri.getHost() == null || !hasValidPort(baseUri)
+        if (scheme == null || baseUri.isOpaque() || baseUri.getRawUserInfo() != null
+            || baseUri.getHost() == null || !hasValidPort(baseUri)
             || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
             return null;
         }
@@ -80,9 +91,14 @@ public final class ImageUrlResolver {
             || "0.0.0.0".equalsIgnoreCase(host);
     }
 
+    private static String withLowercaseScheme(URI uri, String normalizedScheme) {
+        String value = uri.toString();
+        return normalizedScheme + value.substring(value.indexOf(':'));
+    }
+
     private static String replaceOrigin(URI imageUri, URI baseUri) {
         StringBuilder result = new StringBuilder()
-            .append(baseUri.getScheme())
+            .append(baseUri.getScheme().toLowerCase(Locale.ROOT))
             .append("://")
             .append(baseUri.getRawAuthority());
         if (imageUri.getRawPath() != null) {

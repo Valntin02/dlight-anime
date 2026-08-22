@@ -28,11 +28,6 @@ public final class ImageLoader {
     }
 
     public static void loadPlayerThumb(ImageView view, String rawUrl) {
-        Glide.with(view)
-            .load(ImageUrlResolver.resolve(rawUrl))
-            .placeholder(R.drawable.placeholder)
-            .error(R.drawable.error_placeholder)
-            .centerCrop()
-            .into(view);
+        loadCover(view, rawUrl);
     }
 }

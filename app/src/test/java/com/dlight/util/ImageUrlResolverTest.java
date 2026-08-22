@@ -65,14 +65,64 @@ public class ImageUrlResolverTest {
     }
 
     @Test
-    public void resolve_preservesBaseUserInfoIpv6AndPortWhenRewritingLoopback() {
-        assertEquals(
-            "https://user:password@[2001:db8::1]:9443/image%20one.jpg?x=1#part",
+    public void resolve_rejectsBaseUserInfoWhenRewritingLoopback() {
+        assertNull(
             ImageUrlResolver.resolve(
                 "http://localhost:8000/image%20one.jpg?x=1#part",
                 "https://user:password@[2001:db8::1]:9443/api/"
             )
         );
+    }
+
+    @Test
+    public void resolve_rejectsUserInfoInThirdPartyHttpUrl() {
+        assertNull(
+            ImageUrlResolver.resolve("https://user:secret@cdn.example.net/a.jpg", BASE_URL)
+        );
+    }
+
+    @Test
+    public void resolve_normalizesSupportedSchemesToLowercaseWithoutReencoding() {
+        assertEquals(
+            "https://cdn.example.net/image%20one.jpg?x=%2F#part%20one",
+            ImageUrlResolver.resolve(
+                "HTTPS://cdn.example.net/image%20one.jpg?x=%2F#part%20one",
+                BASE_URL
+            )
+        );
+        assertEquals(
+            "content://media/images/image%20one.jpg",
+            ImageUrlResolver.resolve("CONTENT://media/images/image%20one.jpg", BASE_URL)
+        );
+        assertEquals(
+            "file:///storage/image%20one.jpg",
+            ImageUrlResolver.resolve("FILE:///storage/image%20one.jpg", BASE_URL)
+        );
+        assertEquals(
+            "android.resource://com.dlight/drawable/placeholder",
+            ImageUrlResolver.resolve(
+                "ANDROID.RESOURCE://com.dlight/drawable/placeholder",
+                BASE_URL
+            )
+        );
+    }
+
+    @Test
+    public void resolve_appliesHttpPolicyAfterResolvingNetworkPathReference() {
+        assertEquals(
+            "https://api.example.com:8443/a.jpg",
+            ImageUrlResolver.resolve("//localhost:9000/a.jpg", BASE_URL)
+        );
+        assertEquals(
+            "https://cdn.example.net/a.jpg",
+            ImageUrlResolver.resolve("//cdn.example.net/a.jpg", BASE_URL)
+        );
+    }
+
+    @Test
+    public void resolve_rejectsOpaqueLoaderUris() {
+        assertNull(ImageUrlResolver.resolve("content:opaque", BASE_URL));
+        assertNull(ImageUrlResolver.resolve("file:opaque", BASE_URL));
     }
 
     @Test
