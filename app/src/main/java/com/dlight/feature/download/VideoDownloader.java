@@ -137,22 +137,7 @@ public class VideoDownloader {
                 throw new IOException("无法创建缓存目录: " + destination.getAbsolutePath());
             }
 
-            List<String> tsUrls = new ArrayList<>();
-            URL playlistUrl = new URL(m3u8Url);
-            URLConnection playlistConnection = playlistUrl.openConnection();
-            playlistConnection.setConnectTimeout(15000);
-            playlistConnection.setReadTimeout(15000);
-            String baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
-            try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(playlistConnection.getInputStream()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    line = line.trim();
-                    if (line.contains(".ts") && !line.contains("adjump")) {
-                        tsUrls.add(line.startsWith("http") ? line : baseUrl + line);
-                    }
-                }
-            }
+            List<String> tsUrls = loadSegmentUrls(m3u8Url, 0);
             if (tsUrls.isEmpty()) {
                 throw new IOException("播放列表中没有可下载的视频分片");
             }
@@ -229,6 +214,42 @@ public class VideoDownloader {
                 executorService.shutdownNow();
             }
         }
+    }
+
+    private static List<String> loadSegmentUrls(String playlistUrl, int depth) throws IOException {
+        if (depth > 3) {
+            throw new IOException("播放列表嵌套层级过深");
+        }
+        URL baseUrl = new URL(playlistUrl);
+        URLConnection connection = baseUrl.openConnection();
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(15000);
+
+        List<String> segmentUrls = new ArrayList<>();
+        List<String> nestedPlaylists = new ArrayList<>();
+        try (BufferedReader reader = new BufferedReader(
+            new InputStreamReader(connection.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) {
+                    continue;
+                }
+                URL resolvedUrl = new URL(baseUrl, line);
+                if (line.contains(".ts") && !line.contains("adjump")) {
+                    segmentUrls.add(resolvedUrl.toString());
+                } else if (line.contains(".m3u8")) {
+                    nestedPlaylists.add(resolvedUrl.toString());
+                }
+            }
+        }
+        if (!segmentUrls.isEmpty()) {
+            return segmentUrls;
+        }
+        if (!nestedPlaylists.isEmpty()) {
+            return loadSegmentUrls(nestedPlaylists.get(nestedPlaylists.size() - 1), depth + 1);
+        }
+        return segmentUrls;
     }
 
     private static void downloadSegment(String url, File destination) throws IOException {

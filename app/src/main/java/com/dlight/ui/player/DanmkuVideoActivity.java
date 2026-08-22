@@ -378,6 +378,10 @@ private void getDanmu() {
     private void dealVideourls(){
         videourls = new ArrayList<>();
 
+        if (appendPreferredUrlsFromPlayData(videoData.getVodPlayData())) {
+            return;
+        }
+
         String basePlayUrl = videoData.getVod_play_url();
         if (isValidPlayUrl(basePlayUrl)) {
             basePlayUrl = basePlayUrl.trim();
@@ -395,25 +399,64 @@ private void getDanmu() {
             Log.w("DanmkuVideoActivity", "vod_play_url is empty or invalid: " + basePlayUrl);
         }
 
-        if (videourls.isEmpty()) {
-            appendUrlsFromPlayData(videoData.getVodPlayData());
-        }
     }
 
-    private void appendUrlsFromPlayData(JsonElement vodPlayData) {
+    private boolean appendPreferredUrlsFromPlayData(JsonElement vodPlayData) {
         if (vodPlayData == null || vodPlayData.isJsonNull()) {
-            return;
+            return false;
         }
         if (vodPlayData.isJsonArray()) {
             JsonArray sources = vodPlayData.getAsJsonArray();
+            JsonObject preferredSource = null;
+            int preferredPriority = Integer.MAX_VALUE;
             for (JsonElement sourceElement : sources) {
-                appendUrlsFromSource(sourceElement);
+                if (sourceElement == null || !sourceElement.isJsonObject()) {
+                    continue;
+                }
+                JsonObject source = sourceElement.getAsJsonObject();
+                int priority = getSourcePriority(source);
+                if (priority < preferredPriority && hasPlayableEpisodes(source)) {
+                    preferredSource = source;
+                    preferredPriority = priority;
+                }
             }
-            return;
+            if (preferredSource != null) {
+                appendUrlsFromSource(preferredSource);
+            }
+            return !videourls.isEmpty();
         }
         if (vodPlayData.isJsonObject()) {
             appendUrlsFromSource(vodPlayData);
         }
+        return !videourls.isEmpty();
+    }
+
+    private int getSourcePriority(JsonObject source) {
+        String sourceName = getSourceName(source).toLowerCase();
+        if ("lzm3u8".equals(sourceName)) {
+            return 0;
+        }
+        if (sourceName.contains("m3u8") && !sourceName.contains("bfzy")) {
+            return 1;
+        }
+        if (sourceName.contains("bfzy")) {
+            return 3;
+        }
+        return 2;
+    }
+
+    private String getSourceName(JsonObject source) {
+        JsonElement from = source.get("from");
+        if (from != null && !from.isJsonNull()) {
+            return from.getAsString();
+        }
+        JsonElement label = source.get("label");
+        return label == null || label.isJsonNull() ? "" : label.getAsString();
+    }
+
+    private boolean hasPlayableEpisodes(JsonObject source) {
+        JsonElement episodes = source.get("episodes");
+        return episodes != null && episodes.isJsonArray() && episodes.getAsJsonArray().size() > 0;
     }
 
     private void appendUrlsFromSource(JsonElement sourceElement) {
