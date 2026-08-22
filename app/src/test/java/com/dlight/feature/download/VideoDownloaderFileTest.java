@@ -374,7 +374,7 @@ public class VideoDownloaderFileTest {
             RecordingCallback callback = new RecordingCallback();
 
             VideoDownloader.mulDownloadM3u8(
-                    playlistUrl, destination, fileName, null, callback);
+                    playlistUrl, destination, fileName, true, null, callback);
 
             assertTrue(callback.failure.get() instanceof IOException);
             assertEquals(0, existingRequests.get());
@@ -420,7 +420,7 @@ public class VideoDownloaderFileTest {
             write(completed, "verified");
             RecordingCallback callback = new RecordingCallback();
             Thread downloadThread = new Thread(() -> VideoDownloader.mulDownloadM3u8(
-                    playlistUrl, destination, fileName, null, callback));
+                    playlistUrl, destination, fileName, true, null, callback));
 
             downloadThread.start();
             assertTrue(requestStarted.await(5, TimeUnit.SECONDS));
@@ -480,7 +480,7 @@ public class VideoDownloaderFileTest {
             File taskDirectory = taskDirectory(destination, playlistUrl, fileName);
             RecordingCallback callback = new RecordingCallback();
             downloadThread = new Thread(() -> VideoDownloader.mulDownloadM3u8(
-                    playlistUrl, destination, fileName, null, callback));
+                    playlistUrl, destination, fileName, true, null, callback));
 
             downloadThread.start();
             assertTrue("slow request did not start; failure=" + callback.failure.get(),
@@ -524,7 +524,7 @@ public class VideoDownloaderFileTest {
         RecordingCallback callback = new RecordingCallback();
 
         VideoDownloader.mulDownloadM3u8(
-                playlistUrl, destination, fileName, () -> true, callback);
+                playlistUrl, destination, fileName, true, () -> true, callback);
 
         assertEquals(1, callback.paused.get());
         assertTrue(taskDirectory.exists());
@@ -549,7 +549,7 @@ public class VideoDownloaderFileTest {
             RecordingCallback callback = new RecordingCallback();
 
             VideoDownloader.mulDownloadM3u8(
-                    playlistUrl, destination, fileName, null, callback);
+                    playlistUrl, destination, fileName, true, null, callback);
 
             assertTrue(callback.success.get().isFile());
             assertFalse(taskDirectory.exists());

@@ -153,6 +153,12 @@ public class VideoDownloader {
      */
     public static void mulDownloadM3u8(String m3u8Url, File destination, String fileName,
                                        PauseSignal pauseSignal, DownloadCallback callback) {
+        mulDownloadM3u8(m3u8Url, destination, fileName, BuildConfig.DEBUG,
+                pauseSignal, callback);
+    }
+
+    static void mulDownloadM3u8(String m3u8Url, File destination, String fileName,
+            boolean allowPrivate, PauseSignal pauseSignal, DownloadCallback callback) {
         ExecutorService executorService = null;
         TransferController transferController = null;
         CountDownLatch workerLatch = null;
@@ -167,7 +173,7 @@ public class VideoDownloader {
                 throw new IOException("无法创建缓存目录: " + destination.getAbsolutePath());
             }
 
-            List<String> tsUrls = HlsPlaylistResolver.resolve(m3u8Url);
+            List<String> tsUrls = HlsPlaylistResolver.resolveNetwork(m3u8Url, allowPrivate);
             if (tsUrls.isEmpty()) {
                 throw new IOException("播放列表中没有可下载的视频分片");
             }
@@ -205,7 +211,7 @@ public class VideoDownloader {
                         }
                         throwIfPaused(pauseSignal);
                         downloadSegment(tsUrl, new File(taskTempDir, index + ".ts"),
-                                pauseSignal, BuildConfig.DEBUG, taskController);
+                                pauseSignal, allowPrivate, taskController);
                         int completed = completedFiles.incrementAndGet();
                         callback.onProgress((int) ((completed * 100.0) / totalTsFiles));
                     } catch (Exception e) {
