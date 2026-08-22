@@ -16,8 +16,6 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dlight.R;
 import com.dlight.data.remote.AuthHeaderUtil;
 import com.dlight.data.remote.RetrofitClient;
@@ -34,6 +32,7 @@ import com.dlight.data.model.JsonResModel;
 import com.dlight.data.remote.ApiClient;
 import com.dlight.data.remote.ApiService;
 import com.dlight.util.LikeCacheManager;
+import com.dlight.util.ImageLoader;
 
 public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.ViewHolder> {
 
@@ -109,14 +108,7 @@ public class CommentAdapter extends RecyclerView.Adapter<CommentAdapter.ViewHold
         }else{
             holder.reportButton.setImageResource(R.drawable.material_report);
         }
-        // 使用 Glide 加载头像
-        Glide.with(context)
-            .load(userAvatarMap.get(comment.getUserId()))
-            .circleCrop()
-            .skipMemoryCache(true)
-            .diskCacheStrategy(DiskCacheStrategy.ALL)
-            .error(R.drawable.button_style)
-            .into(holder.userAvatar);
+        ImageLoader.loadAvatar(holder.userAvatar, userAvatarMap.get(comment.getUserId()));
 
         //评论详情查看
         holder.commentDetail.setOnClickListener(v->{

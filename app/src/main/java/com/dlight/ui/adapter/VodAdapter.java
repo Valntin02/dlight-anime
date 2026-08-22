@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.dlight.R;
 import com.dlight.network.model.Vod;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -48,14 +48,7 @@ public class VodAdapter extends RecyclerView.Adapter<VodAdapter.VodViewHolder> {
 
         holder.titleTextView.setText(vod.getVodName());
 
-        // 加载封面图
-        if (vod.getVodPic() != null && !vod.getVodPic().isEmpty()) {
-            Picasso.get()
-                    .load(vod.getVodPic())
-                    .placeholder(R.drawable.placeholder)
-                    .error(R.drawable.error_placeholder)
-                    .into(holder.coverImageView);
-        }
+        ImageLoader.loadCover(holder.coverImageView, vod.getVodPic());
 
         // 显示集数信息
         if (vod.getVodRemarks() != null && !vod.getVodRemarks().isEmpty()) {

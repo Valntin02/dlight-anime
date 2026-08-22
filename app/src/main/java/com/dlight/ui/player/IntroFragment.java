@@ -30,7 +30,7 @@ import androidx.fragment.app.Fragment;
 
 import com.dlight.R;
 import com.dlight.data.model.VodData;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -112,8 +112,7 @@ public class IntroFragment extends Fragment {
                 //Log.d("IntroFragment", "videoData.getVod_content(): " + content);
             }
             introView.setText(str);
-            // 使用 Picasso 来加载图片
-            Picasso.get().load(videoData.getVod_pic()).into(imageView);
+            ImageLoader.loadCover(imageView, videoData.getVod_pic());
         }else{
             Log.e("IntroFragment","get videoData error");
         }

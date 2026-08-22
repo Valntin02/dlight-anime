@@ -13,8 +13,6 @@ import androidx.annotation.NonNull;
 import androidx.fragment.app.FragmentActivity;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dlight.R;
 import com.dlight.data.remote.AuthHeaderUtil;
 import com.dlight.data.remote.RetrofitClient;
@@ -30,6 +28,7 @@ import com.dlight.data.model.JsonResModel;
 import com.dlight.data.remote.ApiClient;
 import com.dlight.data.remote.ApiService;
 import com.dlight.util.LikeCacheManager;
+import com.dlight.util.ImageLoader;
 
 public class CommentReplyAdapter extends RecyclerView.Adapter<CommentAdapter.ViewHolder> {
 
@@ -92,14 +91,7 @@ public class CommentReplyAdapter extends RecyclerView.Adapter<CommentAdapter.Vie
         }else{
             holder.reportButton.setImageResource(R.drawable.material_report);
         }
-        // 使用 Glide 加载头像
-        Glide.with(context)
-            .load(userAvatarMap.get(comment.getUserId()))
-            .circleCrop()
-            .skipMemoryCache(true)
-            .diskCacheStrategy(DiskCacheStrategy.ALL)
-            .error(R.drawable.button_style)
-            .into(holder.userAvatar);
+        ImageLoader.loadAvatar(holder.userAvatar, userAvatarMap.get(comment.getUserId()));
 
         // 点赞按钮
         //这里有个客户端的bug就是点赞之后退出再次进入点显示还是可以点赞，这个逻辑处理处理布局麻痹，但对后端没有影响，暂时不修改

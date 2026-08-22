@@ -12,12 +12,10 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dlight.ui.player.DanmkuVideoActivity;
 import com.dlight.R;
 import com.dlight.data.model.VodData;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 
 import java.util.List;
 
@@ -42,15 +40,7 @@ public class PlayRecordAdapter extends RecyclerView.Adapter<PlayRecordAdapter.Pl
     public void onBindViewHolder(@NonNull PlayRecordViewHolder holder, int position) {
         PlayRecord playRecord = playRecordList.get(position);
 
-        // 显示封面图（使用 Glide 加载图片）
-        //默认自带内存和磁盘缓存 这里突然知道为什么加载不出来了 这里全局修改了glide的ssl验证 只验证自己服务器 所以导致请求
-        //这个图片资源是别的服务器导致加载不出来，而评论区的头像可以加载
-//        Glide.with(mcontext)
-//            .load(playRecord.getPicUrl())
-//            .error(R.drawable.button_style)
-//            .into(holder.ivCover);
-        //Piacasso 默认也支持内存磁盘缓存
-        Picasso.get().load(playRecord.getVod_pic()).into(holder.ivCover);
+        ImageLoader.loadCover(holder.ivCover, playRecord.getVod_pic());
 
 
         holder.tvVideoTitle.setText(playRecord.getVod_name());

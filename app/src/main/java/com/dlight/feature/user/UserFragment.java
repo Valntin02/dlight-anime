@@ -18,12 +18,10 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentTransaction;
 
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.engine.DiskCacheStrategy;
 import com.dlight.R;
 import com.dlight.data.remote.AuthHeaderUtil;
 import com.dlight.data.remote.RetrofitClient;
-import com.dlight.util.Param;
+import com.dlight.util.ImageLoader;
 import com.google.android.material.imageview.ShapeableImageView;
 
 import java.io.FileNotFoundException;
@@ -89,8 +87,6 @@ public class UserFragment extends Fragment implements View.OnClickListener {
 
 
     private  void avatarRefresh(boolean flag,String url){
-        String baseurl = Param.getInstance().getBaseUrl();
-
         SharedPreferences sharedPreferences = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
 
         // 检查用户是否已登录
@@ -106,54 +102,14 @@ public class UserFragment extends Fragment implements View.OnClickListener {
         if (isLoggedIn) {
             String username = sharedPreferences.getString("username", "");
             String avatarFile = sharedPreferences.getString("avatarFile", "");
-            Log.d("avatarRefresh", "avatarRefresh: "+avatarFile);
+            long avatarCacheVersion = sharedPreferences.getLong("avatar_cache_version", 0L);
 
             if(avatarFile.isEmpty()) urlFlag=true;
             else urlFlag=false;
 
-            if (avatarFile != null && avatarFile.startsWith("http")) {
-                baseurl = rewriteLoopbackHost(avatarFile.trim(), baseurl);
-            } else {
-                baseurl += avatarFile == null ? "" : avatarFile.trim();
-            }
-
-            Log.d("userinfo", baseurl);
-
             tvUsername.setText(username);
-
-
-        // 使用 Glide 加载头像并设置到 ShapeableImageView
-        //这里缓存问题掉了半天 原来是  .diskCacheStrategy(DiskCacheStrategy.ALL) 这个属性一直没有去掉
-        //导致一直不能刷新图片
-        Glide.with(getContext())
-            .load(baseurl)
-            .circleCrop()  // 通过 Glide 的 circleCrop() 方法实现圆形裁剪
-            .skipMemoryCache(true) // 跳过内存缓存
-            .diskCacheStrategy(DiskCacheStrategy.NONE)
-            .error(R.drawable.button_style)
-            .into(ivAvatarFile);  // 设置图片
+            ImageLoader.loadAvatar(ivAvatarFile, avatarFile, avatarCacheVersion);
     }
-}
-
-// 后端会把头像 URL 写死成 127.0.0.1/localhost（它自己机器上的回环地址），
-// 但模拟器里的 127.0.0.1 是模拟器自身——所以遇到这种 host 时改写成 Param 的 baseUrl host
-// (模拟器走 10.0.2.2，真机走 DEVICE_BASE_URL)。
-private static String rewriteLoopbackHost(String url, String baseUrl) {
-    if (url == null) return null;
-    try {
-        Uri u = Uri.parse(url);
-        String host = u.getHost();
-        if ("127.0.0.1".equals(host) || "localhost".equals(host) || "0.0.0.0".equals(host)) {
-            Uri base = Uri.parse(baseUrl);
-            String authority = base.getEncodedAuthority();
-            String scheme = base.getScheme();
-            if (authority != null && scheme != null) {
-                return u.buildUpon().scheme(scheme).encodedAuthority(authority).build().toString();
-            }
-        }
-    } catch (Exception ignored) {
-    }
-    return url;
 }
 
 @Override
@@ -258,7 +214,9 @@ private  void uploadAvatar(Uri imageUri){
             @Override
             public void onSuccess(JsonResModel data) {
                 if (data.isSuccessCode()) {
-                    Glide.with(getContext()).clear(ivAvatarFile);
+                    sharedPreferences.edit()
+                        .putLong("avatar_cache_version", System.currentTimeMillis())
+                        .apply();
                     if (data.getData() != null && !data.getData().isEmpty()) {
                         avatarRefresh(true, data.getData());
                     } else {

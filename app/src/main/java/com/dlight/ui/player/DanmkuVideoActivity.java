@@ -39,7 +39,7 @@ import com.shuyu.gsyvideoplayer.listener.GSYSampleCallBack;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 import com.zhy.http.okhttp.OkHttpUtils;
 
 import com.zhy.http.okhttp.callback.StringCallback;
@@ -156,11 +156,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         ImageView imageView = new ImageView(this);
         imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
 //        imageView.setImageResource(R.mipmap.xxx1);
-        Picasso.get()
-            .load(videoData.getVod_pic())
-            .placeholder(R.drawable.bg_wiht_shadow) // 加载中显示的图片
-            .error(R.drawable.bg_wiht_shadow)             // 加载失败显示的图片
-            .into(imageView);
+        ImageLoader.loadPlayerThumb(imageView, videoData.getVod_pic());
         binding.danmakuPlayer.setThumbImageView(imageView);
 
         resolveNormalVideoUI();

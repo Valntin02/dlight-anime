@@ -13,7 +13,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.dlight.R;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 
 import java.util.List;
 
@@ -42,10 +42,7 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
     public void onBindViewHolder(@NonNull VideoViewHolder holder, int position) {
         DownloadTask task = tasks.get(position);
         holder.title.setText(task.getTitle());
-        holder.image.setImageResource(R.drawable.button_style);
-        if (!task.getCoverUrl().isEmpty()) {
-            Picasso.get().load(task.getCoverUrl()).placeholder(R.drawable.button_style).into(holder.image);
-        }
+        ImageLoader.loadCover(holder.image, task.getCoverUrl());
 
         if (DownloadContract.STATUS_QUEUED.equals(task.getStatus())) {
             holder.status.setText("等待下载 · 点击暂停");

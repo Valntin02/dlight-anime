@@ -12,7 +12,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.dlight.ui.player.DanmkuVideoActivity;
 import com.dlight.R;
 import com.dlight.data.model.VodData;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 
 import java.util.List;
 
@@ -48,7 +48,7 @@ public class SearchResultAdapter extends RecyclerView.Adapter<SearchResultAdapte
     public void onBindViewHolder(ViewHolder holder, int position) {
         if(data.isEmpty()) return;
         VodData item = data.get(position);
-        Picasso.get().load(item.getVod_pic()).into(holder.imageView);
+        ImageLoader.loadCover(holder.imageView, item.getVod_pic());
 
         holder.title.setText(item.getVod_name());
         holder.years.setText(item.getVod_year());

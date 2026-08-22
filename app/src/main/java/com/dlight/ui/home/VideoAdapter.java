@@ -10,7 +10,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.dlight.ui.player.DanmkuVideoActivity;
 import com.dlight.data.model.VodData;
-import com.squareup.picasso.Picasso;
+import com.dlight.util.ImageLoader;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +36,7 @@ public class VideoAdapter extends RecyclerView.Adapter<VideoAdapter.VideoViewHol
 
         VodData video = videoList.get(position);
         holder.videoTitle.setText(video.getVod_name());
-        // 这里可以加载图片，比如使用 Glide 加载缩略图
-        // 使用 Picasso 来加载图片
-        Picasso.get().load(video.getVod_pic()).into(holder.videoImage);
+        ImageLoader.loadCover(holder.videoImage, video.getVod_pic());
 
         // 添加点击事件，跳转到视频播放页面
         holder.itemView.setOnClickListener(v -> {
