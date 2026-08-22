@@ -144,7 +144,7 @@ public class VideoDownloader {
                 throw new IOException("无法创建缓存目录: " + destination.getAbsolutePath());
             }
 
-            List<String> tsUrls = loadSegmentUrls(m3u8Url, 0);
+            List<String> tsUrls = HlsPlaylistResolver.resolve(m3u8Url);
             if (tsUrls.isEmpty()) {
                 throw new IOException("播放列表中没有可下载的视频分片");
             }
@@ -239,42 +239,6 @@ public class VideoDownloader {
                 executorService.shutdownNow();
             }
         }
-    }
-
-    private static List<String> loadSegmentUrls(String playlistUrl, int depth) throws IOException {
-        if (depth > 3) {
-            throw new IOException("播放列表嵌套层级过深");
-        }
-        URL baseUrl = new URL(playlistUrl);
-        URLConnection connection = baseUrl.openConnection();
-        connection.setConnectTimeout(15000);
-        connection.setReadTimeout(15000);
-
-        List<String> segmentUrls = new ArrayList<>();
-        List<String> nestedPlaylists = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(
-            new InputStreamReader(connection.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                line = line.trim();
-                if (line.isEmpty() || line.startsWith("#")) {
-                    continue;
-                }
-                URL resolvedUrl = new URL(baseUrl, line);
-                if (line.contains(".ts") && !line.contains("adjump")) {
-                    segmentUrls.add(resolvedUrl.toString());
-                } else if (line.contains(".m3u8")) {
-                    nestedPlaylists.add(resolvedUrl.toString());
-                }
-            }
-        }
-        if (!segmentUrls.isEmpty()) {
-            return segmentUrls;
-        }
-        if (!nestedPlaylists.isEmpty()) {
-            return loadSegmentUrls(nestedPlaylists.get(nestedPlaylists.size() - 1), depth + 1);
-        }
-        return segmentUrls;
     }
 
     private static void downloadSegment(String url, File destination, PauseSignal pauseSignal)
