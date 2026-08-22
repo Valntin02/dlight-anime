@@ -26,6 +26,8 @@ public class NotificationUtils {
             indeterminate = true;
         } else if ("completed".equals(status)) {
             contentText = "下载完成";
+        } else if ("paused".equals(status)) {
+            contentText = "已暂停 " + progress + "%";
         } else if ("failed".equals(status)) {
             contentText = "下载失败";
         } else {

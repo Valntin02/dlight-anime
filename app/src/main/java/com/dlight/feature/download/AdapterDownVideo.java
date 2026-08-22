@@ -48,11 +48,16 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
         }
 
         if (DownloadContract.STATUS_QUEUED.equals(task.getStatus())) {
-            holder.status.setText("等待下载");
+            holder.status.setText("等待下载 · 点击暂停");
             holder.progress.setVisibility(View.VISIBLE);
             holder.progress.setIndeterminate(true);
         } else if (DownloadContract.STATUS_DOWNLOADING.equals(task.getStatus())) {
-            holder.status.setText("下载中 " + task.getProgress() + "%");
+            holder.status.setText("下载中 " + task.getProgress() + "% · 点击暂停");
+            holder.progress.setVisibility(View.VISIBLE);
+            holder.progress.setIndeterminate(false);
+            holder.progress.setProgress(task.getProgress());
+        } else if (DownloadContract.STATUS_PAUSED.equals(task.getStatus())) {
+            holder.status.setText("已暂停 " + task.getProgress() + "% · 点击继续");
             holder.progress.setVisibility(View.VISIBLE);
             holder.progress.setIndeterminate(false);
             holder.progress.setProgress(task.getProgress());

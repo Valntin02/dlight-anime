@@ -31,13 +31,22 @@ public class ServiceDownload extends Service {
     private final AtomicInteger pendingTasks = new AtomicInteger(0);
     private final AtomicInteger latestStartId = new AtomicInteger(0);
     private final Set<String> activeTaskIds = ConcurrentHashMap.newKeySet();
+    private final Set<String> pauseRequests = ConcurrentHashMap.newKeySet();
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent == null || !ACTION_START.equals(intent.getAction())) {
+        if (intent == null) {
             return START_NOT_STICKY;
         }
         latestStartId.set(startId);
+
+        if (DownloadContract.ACTION_PAUSE.equals(intent.getAction())) {
+            pauseTask(intent.getStringExtra(DownloadContract.EXTRA_TASK_ID));
+            return START_NOT_STICKY;
+        }
+        if (!ACTION_START.equals(intent.getAction())) {
+            return START_NOT_STICKY;
+        }
 
         DownloadTask task = taskFromIntent(intent);
         if (task == null) {
@@ -50,6 +59,7 @@ public class ServiceDownload extends Service {
             Log.d(TAG, "任务已在队列中: " + task.getTaskId());
             return START_NOT_STICKY;
         }
+        pauseRequests.remove(task.getTaskId());
 
         DownloadTask existing = DownloadTaskStore.get(this, task.getTaskId());
         if (existing != null && existing.isCompleted()
@@ -84,6 +94,11 @@ public class ServiceDownload extends Service {
     }
 
     private void runDownload(DownloadTask task) {
+        if (pauseRequests.contains(task.getTaskId())) {
+            markPaused(task);
+            finishTask(task.getTaskId());
+            return;
+        }
         task.setStatus(DownloadContract.STATUS_DOWNLOADING);
         task.setProgress(0);
         task.setErrorMessage("");
@@ -91,10 +106,14 @@ public class ServiceDownload extends Service {
 
         File videoDir = new File(getFilesDir(), "video");
         VideoDownloader.mulDownloadM3u8(task.getUrl(), videoDir, task.getTitle(),
+            () -> pauseRequests.contains(task.getTaskId()),
             new VideoDownloader.DownloadCallback() {
                 @Override
                 public void onProgress(int progress) {
                     synchronized (task) {
+                        if (pauseRequests.contains(task.getTaskId())) {
+                            return;
+                        }
                         if (progress <= task.getProgress()) {
                             return;
                         }
@@ -120,9 +139,42 @@ public class ServiceDownload extends Service {
                     publish(task);
                     Log.e(TAG, "下载失败: " + task.getTaskId(), error);
                 }
+
+                @Override
+                public void onPaused() {
+                    markPaused(task);
+                }
             });
 
+        finishTask(task.getTaskId());
+    }
+
+    private void pauseTask(String taskId) {
+        if (taskId == null || taskId.isEmpty()) {
+            return;
+        }
+        pauseRequests.add(taskId);
+        if (pendingTasks.get() == 0) {
+            DownloadTask task = DownloadTaskStore.get(this, taskId);
+            if (task != null && task.isActive()) {
+                task.setStatus(DownloadContract.STATUS_PAUSED);
+                task.setErrorMessage("");
+                DownloadTaskStore.upsert(this, task);
+                broadcastUpdate(task);
+            }
+            stopSelfResult(latestStartId.get());
+        }
+    }
+
+    private void markPaused(DownloadTask task) {
         activeTaskIds.remove(task.getTaskId());
+        task.setStatus(DownloadContract.STATUS_PAUSED);
+        task.setErrorMessage("");
+        publish(task);
+    }
+
+    private void finishTask(String taskId) {
+        activeTaskIds.remove(taskId);
         if (pendingTasks.decrementAndGet() == 0) {
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelfResult(latestStartId.get());

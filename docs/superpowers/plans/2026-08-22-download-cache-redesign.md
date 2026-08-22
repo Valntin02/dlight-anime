@@ -55,6 +55,7 @@
 - Modify `app/src/main/res/layout/activity_downvideo.xml`
 
 - [ ] Render queued/downloading/failed/completed tasks with progress.
+- [ ] Toggle active tasks between downloading and paused on item click, preserving completed segments for resume.
 - [ ] Play completed files, retry failed tasks, and delete task/file on long press.
 - [ ] Preserve visibility of legacy completed files not yet represented in the task store.
 - [ ] Register/unregister the update receiver with the Activity lifecycle.

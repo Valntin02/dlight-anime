@@ -2,6 +2,7 @@ package com.dlight.feature.download;
 
 public final class DownloadContract {
     public static final String ACTION_UPDATE = "com.dlight.action.DOWNLOAD_UPDATE";
+    public static final String ACTION_PAUSE = "com.dlight.action.PAUSE_DOWNLOAD";
 
     public static final String EXTRA_TASK_ID = "download_task_id";
     public static final String EXTRA_VIDEO_ID = "download_video_id";
@@ -12,6 +13,7 @@ public final class DownloadContract {
 
     public static final String STATUS_QUEUED = "queued";
     public static final String STATUS_DOWNLOADING = "downloading";
+    public static final String STATUS_PAUSED = "paused";
     public static final String STATUS_COMPLETED = "completed";
     public static final String STATUS_FAILED = "failed";
 

@@ -99,11 +99,18 @@ public class ActvityDownVideo extends AppCompatActivity {
             intent.putExtra("video_path", file.getAbsolutePath());
             intent.putExtra("video_name", task.getTitle());
             startActivity(intent);
-        } else if (DownloadContract.STATUS_FAILED.equals(task.getStatus())) {
+        } else if (task.isActive()) {
+            pauseTask(task);
+        } else if (task.isPaused() || DownloadContract.STATUS_FAILED.equals(task.getStatus())) {
             startTask(task);
-        } else {
-            Toast.makeText(this, "任务正在下载，请稍候", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    private void pauseTask(DownloadTask task) {
+        Intent intent = new Intent(this, ServiceDownload.class);
+        intent.setAction(DownloadContract.ACTION_PAUSE);
+        intent.putExtra(DownloadContract.EXTRA_TASK_ID, task.getTaskId());
+        startService(intent);
     }
 
     private void startTask(DownloadTask task) {
@@ -123,6 +130,8 @@ public class ActvityDownVideo extends AppCompatActivity {
     }
 
     private void deleteTask(DownloadTask task) {
+        VideoDownloader.deletePartialDownload(new File(getFilesDir(), "video"),
+            task.getUrl(), task.getTitle());
         if (!task.getFilePath().isEmpty()) {
             File file = new File(task.getFilePath());
             if (file.exists()) {

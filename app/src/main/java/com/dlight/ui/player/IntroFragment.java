@@ -212,6 +212,9 @@ public class IntroFragment extends Fragment {
         } else if (DownloadContract.STATUS_DOWNLOADING.equals(task.getStatus())) {
             btnDownLoader.setText(task.getProgress() + "%");
             btnDownLoader.setEnabled(false);
+        } else if (DownloadContract.STATUS_PAUSED.equals(task.getStatus())) {
+            btnDownLoader.setText("继续");
+            btnDownLoader.setEnabled(true);
         } else if (DownloadContract.STATUS_COMPLETED.equals(task.getStatus())) {
             btnDownLoader.setText("已缓存");
             btnDownLoader.setEnabled(false);

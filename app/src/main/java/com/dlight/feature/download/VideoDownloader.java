@@ -25,6 +25,12 @@ public class VideoDownloader {
         void onProgress(int progress);
         void onSuccess(File file);
         void onFailure(Exception e);
+        default void onPaused() {
+        }
+    }
+
+    public interface PauseSignal {
+        boolean isPauseRequested();
     }
     private static final int THREAD_POOL_SIZE = 10;
     //普通文件下载
@@ -126,13 +132,14 @@ public class VideoDownloader {
      * @param callback
      */
     public static void mulDownloadM3u8(String m3u8Url, File destination, String fileName,
-                                       DownloadCallback callback) {
+                                       PauseSignal pauseSignal, DownloadCallback callback) {
         ExecutorService executorService = null;
         File videoTempDir = null;
         try {
             if (m3u8Url == null || m3u8Url.trim().isEmpty()) {
                 throw new IOException("下载地址为空");
             }
+            throwIfPaused(pauseSignal);
             if (!destination.exists() && !destination.mkdirs()) {
                 throw new IOException("无法创建缓存目录: " + destination.getAbsolutePath());
             }
@@ -151,20 +158,35 @@ public class VideoDownloader {
 
             final File taskTempDir = videoTempDir;
             int totalTsFiles = tsUrls.size();
-            CountDownLatch latch = new CountDownLatch(totalTsFiles);
-            AtomicInteger completedFiles = new AtomicInteger(0);
+            List<Integer> missingSegments = new ArrayList<>();
+            int existingSegments = 0;
+            for (int i = 0; i < totalTsFiles; i++) {
+                File segment = new File(taskTempDir, i + ".ts");
+                if (segment.exists() && segment.length() > 0) {
+                    existingSegments++;
+                } else {
+                    missingSegments.add(i);
+                }
+            }
+            CountDownLatch latch = new CountDownLatch(missingSegments.size());
+            AtomicInteger completedFiles = new AtomicInteger(existingSegments);
             AtomicReference<Exception> failure = new AtomicReference<>();
             executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
 
-            for (int i = 0; i < totalTsFiles; i++) {
-                final int index = i;
-                final String tsUrl = tsUrls.get(i);
+            if (existingSegments > 0) {
+                callback.onProgress((int) ((existingSegments * 100.0) / totalTsFiles));
+            }
+
+            for (int missingIndex : missingSegments) {
+                final int index = missingIndex;
+                final String tsUrl = tsUrls.get(index);
                 executorService.submit(() -> {
                     try {
                         if (failure.get() != null) {
                             return;
                         }
-                        downloadSegment(tsUrl, new File(taskTempDir, index + ".ts"));
+                        throwIfPaused(pauseSignal);
+                        downloadSegment(tsUrl, new File(taskTempDir, index + ".ts"), pauseSignal);
                         int completed = completedFiles.incrementAndGet();
                         callback.onProgress((int) ((completed * 100.0) / totalTsFiles));
                     } catch (Exception e) {
@@ -179,6 +201,7 @@ public class VideoDownloader {
             if (failure.get() != null) {
                 throw failure.get();
             }
+            throwIfPaused(pauseSignal);
 
             File mergedFile = new File(destination, safeName + ".ts");
             try (FileOutputStream finalOut = new FileOutputStream(mergedFile, false)) {
@@ -198,6 +221,8 @@ public class VideoDownloader {
             }
             deleteDirectory(videoTempDir);
             callback.onSuccess(mergedFile);
+        } catch (DownloadPausedException e) {
+            callback.onPaused();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (videoTempDir != null) {
@@ -252,10 +277,12 @@ public class VideoDownloader {
         return segmentUrls;
     }
 
-    private static void downloadSegment(String url, File destination) throws IOException {
+    private static void downloadSegment(String url, File destination, PauseSignal pauseSignal)
+        throws IOException {
         IOException lastError = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
             try {
+                throwIfPaused(pauseSignal);
                 URLConnection connection = new URL(url).openConnection();
                 connection.setConnectTimeout(15000);
                 connection.setReadTimeout(30000);
@@ -264,10 +291,14 @@ public class VideoDownloader {
                     byte[] buffer = new byte[8192];
                     int count;
                     while ((count = in.read(buffer)) != -1) {
+                        throwIfPaused(pauseSignal);
                         out.write(buffer, 0, count);
                     }
                 }
                 return;
+            } catch (DownloadPausedException e) {
+                destination.delete();
+                throw e;
             } catch (IOException e) {
                 lastError = e;
                 if (attempt < 3) {
@@ -287,6 +318,25 @@ public class VideoDownloader {
         String value = fileName == null ? "video" : fileName.trim();
         value = value.replaceAll("[\\\\/:*?\"<>|]", "_");
         return value.isEmpty() ? "video" : value;
+    }
+
+    public static void deletePartialDownload(File destination, String m3u8Url, String fileName) {
+        String safeName = sanitizeFileName(fileName);
+        File tempDirectory = new File(destination,
+            ".temp_" + Integer.toHexString((m3u8Url + safeName).hashCode()));
+        deleteDirectory(tempDirectory);
+    }
+
+    private static void throwIfPaused(PauseSignal pauseSignal) throws DownloadPausedException {
+        if (pauseSignal != null && pauseSignal.isPauseRequested()) {
+            throw new DownloadPausedException();
+        }
+    }
+
+    private static class DownloadPausedException extends IOException {
+        DownloadPausedException() {
+            super("下载已暂停");
+        }
     }
 
     private static void deleteDirectory(File directory) {

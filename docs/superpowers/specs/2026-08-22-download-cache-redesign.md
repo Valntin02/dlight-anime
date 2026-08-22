@@ -39,7 +39,7 @@
 
 ## 状态流
 
-`QUEUED → DOWNLOADING → COMPLETED`，异常时进入 `FAILED`。重试将 `FAILED` 重新置为 `QUEUED`。所有更新先写入任务仓库，再广播给可见 UI；通知栏读取同一进度值。
+`QUEUED → DOWNLOADING → COMPLETED`，异常时进入 `FAILED`。下载中或排队中的任务可进入 `PAUSED`；继续时重新进入 `QUEUED`，复用已完成分片并从原进度继续。重试将 `FAILED` 重新置为 `QUEUED`。所有更新先写入任务仓库，再广播给可见 UI；通知栏读取同一进度值。
 
 ## 验证
 

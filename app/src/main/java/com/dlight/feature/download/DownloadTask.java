@@ -147,6 +147,10 @@ public class DownloadTask {
             || DownloadContract.STATUS_DOWNLOADING.equals(status);
     }
 
+    public boolean isPaused() {
+        return DownloadContract.STATUS_PAUSED.equals(status);
+    }
+
     private void touch() {
         updatedAt = System.currentTimeMillis();
     }
