@@ -324,3 +324,4 @@ fabric.properties
 
 keyid
 .idea/
+.worktrees/
