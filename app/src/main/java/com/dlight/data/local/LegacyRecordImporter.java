@@ -199,6 +199,7 @@ final class LegacyRecordImporter {
                 record.setVod_name(getString(cursor, "vod_name"));
                 record.setVod_pic(getString(cursor, "vod_pic"));
                 record.setVod_play_url(getString(cursor, "vod_play_url"));
+                record.setVod_play_data(getOptionalString(cursor, "vod_play_data"));
                 record.setVod_actor(getString(cursor, "vod_actor"));
                 record.setVod_remarks(getString(cursor, "vod_remarks"));
                 record.setVod_year(getString(cursor, "vod_year"));
@@ -232,6 +233,7 @@ final class LegacyRecordImporter {
                 record.setVod_name(getString(cursor, "vod_name"));
                 record.setVod_pic(getString(cursor, "vod_pic"));
                 record.setVod_play_url(getString(cursor, "vod_play_url"));
+                record.setVod_play_data(getOptionalString(cursor, "vod_play_data"));
                 record.setVod_actor(getString(cursor, "vod_actor"));
                 record.setVod_remarks(getString(cursor, "vod_remarks"));
                 record.setVod_year(getString(cursor, "vod_year"));
@@ -256,6 +258,12 @@ final class LegacyRecordImporter {
     private static String getString(Cursor cursor, String columnName) {
         int columnIndex = cursor.getColumnIndexOrThrow(columnName);
         return cursor.isNull(columnIndex) ? null : cursor.getString(columnIndex);
+    }
+
+    private static String getOptionalString(Cursor cursor, String columnName) {
+        int columnIndex = cursor.getColumnIndex(columnName);
+        return columnIndex < 0 || cursor.isNull(columnIndex)
+            ? null : cursor.getString(columnIndex);
     }
 
     private static void markCompleted(Context context) {

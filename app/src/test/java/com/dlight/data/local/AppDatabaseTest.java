@@ -4,11 +4,13 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
+import android.database.sqlite.SQLiteConstraintException;
 import android.database.sqlite.SQLiteDatabase;
 
 import androidx.room.Room;
@@ -91,7 +93,7 @@ public class AppDatabaseTest {
         try {
             fixture.execSQL("CREATE TABLE sentinel (value TEXT NOT NULL)");
             fixture.execSQL("INSERT INTO sentinel (value) VALUES ('preserve me')");
-            fixture.setVersion(2);
+            fixture.setVersion(3);
         } finally {
             fixture.close();
         }
@@ -119,11 +121,59 @@ public class AppDatabaseTest {
     }
 
     @Test
+    public void migratesExactV1RecordsToV2WithoutDataLoss() throws Exception {
+        createExactV1Database(AppDatabase.CANONICAL_DB_NAME);
+
+        AppDatabase canonical = inBackground(
+            () -> AppDatabase.getInstancePlayRecord(context));
+        PlayRecord play = inBackground(
+            () -> canonical.playRecordDao().getPlayRecordByUserAndVideo(41, 101));
+        MyStarRecord star = inBackground(
+            () -> canonical.myStarRecordDao().getStarsByUserAndVideo(42, 202));
+
+        assertNotNull(play);
+        assertEquals(77, play.getId());
+        assertEquals(41, play.getUserId());
+        assertEquals(101, play.getVod_id());
+        assertEquals("v1 play", play.getVod_name());
+        assertEquals("legacy-play-url", play.getVod_play_url());
+        assertEquals(6, play.getEpisodeIndex());
+        assertTrue(play.getIsSynced());
+        assertNull(play.getVod_play_data());
+        assertNotNull(star);
+        assertEquals(88, star.getId());
+        assertEquals(42, star.getUserId());
+        assertEquals(202, star.getVod_id());
+        assertEquals("v1 star", star.getVod_name());
+        assertEquals("legacy-star-url", star.getVod_play_url());
+        assertTrue(star.getIsSynced());
+        assertNull(star.getVod_play_data());
+
+        assertPlayUniqueIndexEnforced(canonical);
+        assertStarUniqueIndexEnforced(canonical);
+    }
+
+    @Test
+    public void importsV1LegacyRowsWithoutStructuredColumn() throws Exception {
+        createExactV1Database(AppDatabase.LEGACY_DB_NAME);
+
+        AppDatabase canonical = inBackground(
+            () -> AppDatabase.getInstancePlayRecord(context));
+
+        assertNull(inBackground(() -> canonical.playRecordDao()
+            .getPlayRecordByUserAndVideo(41, 101).getVod_play_data()));
+        assertNull(inBackground(() -> canonical.myStarRecordDao()
+            .getStarsByUserAndVideo(42, 202).getVod_play_data()));
+    }
+
+    @Test
     public void importsPlayAndFavoriteRowsFromLegacyDatabase() throws Exception {
         PlayRecord legacyPlay = playRecord(41, 101, "legacy play");
         legacyPlay.setId(987);
+        legacyPlay.setVod_play_data("{\"source\":\"legacy-play\"}");
         MyStarRecord legacyStar = starRecord(42, 202, "legacy star");
         legacyStar.setId(654);
+        legacyStar.setVod_play_data("[\"legacy-star\"]");
         createLegacyDatabase(legacyPlay, legacyStar);
 
         AppDatabase canonical = inBackground(() -> AppDatabase.getInstancePlayRecord(context));
@@ -134,10 +184,12 @@ public class AppDatabaseTest {
             () -> canonical.myStarRecordDao().getStarsByUserAndVideo(42, 202));
         assertNotNull(importedPlay);
         assertEquals("legacy play", importedPlay.getVod_name());
+        assertEquals("{\"source\":\"legacy-play\"}", importedPlay.getVod_play_data());
         assertTrue(importedPlay.getId() > 0);
         assertFalse(importedPlay.getId() == legacyPlay.getId());
         assertNotNull(importedStar);
         assertEquals("legacy star", importedStar.getVod_name());
+        assertEquals("[\"legacy-star\"]", importedStar.getVod_play_data());
         assertTrue(importedStar.getId() > 0);
         assertFalse(importedStar.getId() == legacyStar.getId());
     }
@@ -380,6 +432,75 @@ public class AppDatabaseTest {
 
     private void createCanonicalDatabase(PlayRecord play, MyStarRecord star) throws Exception {
         createDatabase(AppDatabase.CANONICAL_DB_NAME, play, star);
+    }
+
+    private void createExactV1Database(String name) throws Exception {
+        inBackground(() -> {
+            File databaseFile = context.getDatabasePath(name);
+            assertTrue(databaseFile.getParentFile().mkdirs()
+                || databaseFile.getParentFile().isDirectory());
+            SQLiteDatabase database = SQLiteDatabase.openOrCreateDatabase(databaseFile, null);
+            try {
+                database.execSQL("CREATE TABLE play_records ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    + "userId INTEGER NOT NULL, vod_id INTEGER NOT NULL, "
+                    + "vod_name TEXT, vod_pic TEXT, vod_play_url TEXT, vod_actor TEXT, "
+                    + "vod_remarks TEXT, vod_year TEXT, vod_content TEXT, vod_total TEXT, "
+                    + "episodeIndex INTEGER NOT NULL, isSynced INTEGER NOT NULL)");
+                database.execSQL("CREATE UNIQUE INDEX index_play_records_userId_vod_id "
+                    + "ON play_records (userId, vod_id)");
+                database.execSQL("CREATE TABLE myStar_records ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    + "userId INTEGER NOT NULL, vod_id INTEGER NOT NULL, "
+                    + "vod_name TEXT, vod_pic TEXT, vod_play_url TEXT, vod_actor TEXT, "
+                    + "vod_remarks TEXT, vod_year TEXT, vod_content TEXT, vod_total TEXT, "
+                    + "isSynced INTEGER NOT NULL)");
+                database.execSQL("CREATE UNIQUE INDEX index_myStar_records_userId_vod_id "
+                    + "ON myStar_records (userId, vod_id)");
+                database.execSQL("CREATE TABLE room_master_table "
+                    + "(id INTEGER PRIMARY KEY, identity_hash TEXT)");
+                database.execSQL("INSERT OR REPLACE INTO room_master_table "
+                    + "(id, identity_hash) VALUES (42, '99328aabec8cbd361a1a08dac4d401dc')");
+                database.execSQL("INSERT INTO play_records "
+                    + "(id, userId, vod_id, vod_name, vod_pic, vod_play_url, vod_actor, "
+                    + "vod_remarks, vod_year, vod_content, vod_total, episodeIndex, isSynced) "
+                    + "VALUES (77, 41, 101, 'v1 play', 'play-pic', 'legacy-play-url', "
+                    + "'play-actor', 'play-remarks', '2025', 'play-content', '12', 6, 1)");
+                database.execSQL("INSERT INTO myStar_records "
+                    + "(id, userId, vod_id, vod_name, vod_pic, vod_play_url, vod_actor, "
+                    + "vod_remarks, vod_year, vod_content, vod_total, isSynced) "
+                    + "VALUES (88, 42, 202, 'v1 star', 'star-pic', 'legacy-star-url', "
+                    + "'star-actor', 'star-remarks', '2024', 'star-content', '24', 1)");
+                database.setVersion(1);
+            } finally {
+                database.close();
+            }
+            return null;
+        });
+    }
+
+    private void assertPlayUniqueIndexEnforced(AppDatabase canonical) throws Exception {
+        try {
+            inBackground(() -> {
+                canonical.playRecordDao().insert(playRecord(41, 101, "duplicate play"));
+                return null;
+            });
+            fail("Expected migrated play unique index to reject a duplicate");
+        } catch (ExecutionException expected) {
+            assertTrue(expected.getCause() instanceof SQLiteConstraintException);
+        }
+    }
+
+    private void assertStarUniqueIndexEnforced(AppDatabase canonical) throws Exception {
+        try {
+            inBackground(() -> {
+                canonical.myStarRecordDao().insert(starRecord(42, 202, "duplicate star"));
+                return null;
+            });
+            fail("Expected migrated star unique index to reject a duplicate");
+        } catch (ExecutionException expected) {
+            assertTrue(expected.getCause() instanceof SQLiteConstraintException);
+        }
     }
 
     private void createLegacyDatabase(PlayRecord play, MyStarRecord star) throws Exception {

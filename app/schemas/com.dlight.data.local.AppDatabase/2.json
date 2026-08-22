@@ -1,0 +1,226 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "33da2410f831eb125dedfcba6bf3487c",
+    "entities": [
+      {
+        "tableName": "play_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` INTEGER NOT NULL, `vod_id` INTEGER NOT NULL, `vod_name` TEXT, `vod_pic` TEXT, `vod_play_url` TEXT, `vod_play_data` TEXT, `vod_actor` TEXT, `vod_remarks` TEXT, `vod_year` TEXT, `vod_content` TEXT, `vod_total` TEXT, `episodeIndex` INTEGER NOT NULL, `isSynced` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vod_id",
+            "columnName": "vod_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vod_name",
+            "columnName": "vod_name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_pic",
+            "columnName": "vod_pic",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_play_url",
+            "columnName": "vod_play_url",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_play_data",
+            "columnName": "vod_play_data",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_actor",
+            "columnName": "vod_actor",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_remarks",
+            "columnName": "vod_remarks",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_year",
+            "columnName": "vod_year",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_content",
+            "columnName": "vod_content",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_total",
+            "columnName": "vod_total",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "episodeIndex",
+            "columnName": "episodeIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSynced",
+            "columnName": "isSynced",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_play_records_userId_vod_id",
+            "unique": true,
+            "columnNames": [
+              "userId",
+              "vod_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_play_records_userId_vod_id` ON `${TABLE_NAME}` (`userId`, `vod_id`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "myStar_records",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `userId` INTEGER NOT NULL, `vod_id` INTEGER NOT NULL, `vod_name` TEXT, `vod_pic` TEXT, `vod_play_url` TEXT, `vod_play_data` TEXT, `vod_actor` TEXT, `vod_remarks` TEXT, `vod_year` TEXT, `vod_content` TEXT, `vod_total` TEXT, `isSynced` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "userId",
+            "columnName": "userId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vod_id",
+            "columnName": "vod_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "vod_name",
+            "columnName": "vod_name",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_pic",
+            "columnName": "vod_pic",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_play_url",
+            "columnName": "vod_play_url",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_play_data",
+            "columnName": "vod_play_data",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_actor",
+            "columnName": "vod_actor",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_remarks",
+            "columnName": "vod_remarks",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_year",
+            "columnName": "vod_year",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_content",
+            "columnName": "vod_content",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "vod_total",
+            "columnName": "vod_total",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isSynced",
+            "columnName": "isSynced",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_myStar_records_userId_vod_id",
+            "unique": true,
+            "columnNames": [
+              "userId",
+              "vod_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_myStar_records_userId_vod_id` ON `${TABLE_NAME}` (`userId`, `vod_id`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '33da2410f831eb125dedfcba6bf3487c')"
+    ]
+  }
+}
