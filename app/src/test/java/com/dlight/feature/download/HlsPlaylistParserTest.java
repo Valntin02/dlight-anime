@@ -77,12 +77,19 @@ public class HlsPlaylistParserTest {
                 "暂不支持字节范围分片");
         assertUnsupported("#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key\"\nsegment.ts\n",
                 "暂不支持加密 HLS 下载");
+        assertUnsupported("#EXTM3U\n#EXT-X-KEY:URI=\"key\"\nsegment.ts\n",
+                "暂不支持加密 HLS 下载");
+        assertUnsupported("#EXTM3U\n#EXT-X-KEY:METHOD=NONEE\nsegment.ts\n",
+                "暂不支持加密 HLS 下载");
+        assertUnsupported(
+                "#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI=\"key?METHOD=NONE\"\nsegment.ts\n",
+                "暂不支持加密 HLS 下载");
     }
 
     @Test
     public void acceptsMethodNone() throws Exception {
         HlsPlaylistParser.Result result = HlsPlaylistParser.parse(
-                "#EXTM3U\n#EXT-X-KEY:METHOD=NONE\nsegment.ts\n",
+                "#EXTM3U\n#ext-x-key:method=none\nsegment.ts\n",
                 URI.create("https://cdn.example.com/master.m3u8"));
 
         assertEquals(Collections.singletonList("https://cdn.example.com/segment.ts"),

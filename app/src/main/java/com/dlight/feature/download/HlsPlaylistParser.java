@@ -14,6 +14,9 @@ public final class HlsPlaylistParser {
     private static final Pattern BANDWIDTH_PATTERN = Pattern.compile(
             "(?:^|,)\\s*BANDWIDTH\\s*=\\s*(\\d+)\\s*(?:,|$)",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern KEY_METHOD_PATTERN = Pattern.compile(
+            "(?:^|,)\\s*METHOD\\s*=\\s*([^,\\s]+)",
+            Pattern.CASE_INSENSITIVE);
 
     private HlsPlaylistParser() {
     }
@@ -48,7 +51,7 @@ public final class HlsPlaylistParser {
             if (upper.startsWith("#EXT-X-BYTERANGE")) {
                 throw new IOException("暂不支持字节范围分片");
             }
-            if (upper.startsWith("#EXT-X-KEY") && !upper.contains("METHOD=NONE")) {
+            if (upper.startsWith("#EXT-X-KEY") && !hasNoEncryptionMethod(line)) {
                 throw new IOException("暂不支持加密 HLS 下载");
             }
             if (upper.startsWith("#EXT-X-STREAM-INF")) {
@@ -102,6 +105,15 @@ public final class HlsPlaylistParser {
         } catch (NumberFormatException ignored) {
             return 0L;
         }
+    }
+
+    private static boolean hasNoEncryptionMethod(String keyLine) {
+        int colon = keyLine.indexOf(':');
+        if (colon < 0) {
+            return false;
+        }
+        Matcher matcher = KEY_METHOD_PATTERN.matcher(keyLine.substring(colon + 1));
+        return matcher.find() && "NONE".equalsIgnoreCase(matcher.group(1));
     }
 
     private static String resolveUri(URI baseUri, String value) throws IOException {
