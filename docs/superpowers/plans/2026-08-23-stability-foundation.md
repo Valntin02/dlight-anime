@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the currently used `RetrofitClient`/`ApiService` surface as a compatibility boundary while replacing its internals with `NetworkConfig` and `HttpClientFactory`. Glide receives an independent system-CA client through `MyAppGlideModule`; UI code calls a small `ImageLoader` instead of configuring requests. Security and dependency cleanup happen only after the new clients and image path are verified.
 
-**Tech Stack:** Java, Android Gradle Plugin 8.6.1, Gradle 8.7, Retrofit 2.9.0, OkHttp 4.12.0, Glide 4.14.0, JUnit 4.13.2, Robolectric 4.13.2
+**Tech Stack:** Java, Android Gradle Plugin 8.6.1, Gradle 8.7, Retrofit 2.9.0, OkHttp 4.12.0, Glide 4.14.0, JUnit 4.13.2, Robolectric 4.13
 
 ---
 
@@ -60,7 +60,7 @@ dependencies {
     implementation androidDependencies.annotation
 
     testImplementation testDependencies.junit
-    testImplementation "org.robolectric:robolectric:4.13.2"
+    testImplementation "org.robolectric:robolectric:4.13"
     androidTestImplementation testDependencies.runner
     androidTestImplementation testDependencies.espressoCore
 }
