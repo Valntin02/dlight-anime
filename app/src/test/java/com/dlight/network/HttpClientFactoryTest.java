@@ -11,6 +11,7 @@ import org.junit.Test;
 import java.net.ProxySelector;
 import java.util.List;
 
+import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
 import okhttp3.logging.HttpLoggingInterceptor;
 
@@ -34,20 +35,24 @@ public class HttpClientFactoryTest {
     }
 
     @Test
-    public void imageClient_hasNoHttpLoggingInterceptor() {
-        assertEquals(0, loggingInterceptors(HttpClientFactory.imageClient()).size());
+    public void clients_haveNoHttpLoggingInterceptor() {
+        assertEquals(0, interceptors(HttpClientFactory.apiClient(), HttpLoggingInterceptor.class).size());
+        assertEquals(0, interceptors(HttpClientFactory.imageClient(), HttpLoggingInterceptor.class).size());
     }
 
     @Test
-    public void apiClient_debugLoggingIsAtMostBasic() {
-        List<HttpLoggingInterceptor> logging = loggingInterceptors(HttpClientFactory.apiClient());
+    public void onlyDebugApiClient_hasOneSafeRequestLoggingInterceptor() {
+        List<SafeRequestLoggingInterceptor> apiLogging = interceptors(
+                HttpClientFactory.apiClient(), SafeRequestLoggingInterceptor.class);
+        List<SafeRequestLoggingInterceptor> imageLogging = interceptors(
+                HttpClientFactory.imageClient(), SafeRequestLoggingInterceptor.class);
 
         if (BuildConfig.DEBUG) {
-            assertEquals(1, logging.size());
-            assertEquals(HttpLoggingInterceptor.Level.BASIC, logging.get(0).getLevel());
+            assertEquals(1, apiLogging.size());
         } else {
-            assertEquals(0, logging.size());
+            assertEquals(0, apiLogging.size());
         }
+        assertEquals(0, imageLogging.size());
     }
 
     private static void assertTransportSettings(OkHttpClient client) {
@@ -59,10 +64,10 @@ public class HttpClientFactoryTest {
         assertEquals(true, client.retryOnConnectionFailure());
     }
 
-    private static List<HttpLoggingInterceptor> loggingInterceptors(OkHttpClient client) {
+    private static <T extends Interceptor> List<T> interceptors(OkHttpClient client, Class<T> type) {
         return client.interceptors().stream()
-                .filter(HttpLoggingInterceptor.class::isInstance)
-                .map(HttpLoggingInterceptor.class::cast)
+                .filter(type::isInstance)
+                .map(type::cast)
                 .collect(java.util.stream.Collectors.toList());
     }
 }

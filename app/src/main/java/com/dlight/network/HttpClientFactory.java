@@ -1,14 +1,16 @@
 package com.dlight.network;
 
+import android.util.Log;
+
 import com.dlight.BuildConfig;
 
 import java.net.ProxySelector;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
-import okhttp3.logging.HttpLoggingInterceptor;
 
 public final class HttpClientFactory {
+    private static final String TAG = "ApiRequest";
     private static final OkHttpClient API_CLIENT = createApiClient();
     private static final OkHttpClient IMAGE_CLIENT = baseBuilder().build();
 
@@ -26,10 +28,8 @@ public final class HttpClientFactory {
     private static OkHttpClient createApiClient() {
         OkHttpClient.Builder builder = baseBuilder();
         if (BuildConfig.DEBUG) {
-            HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
-            logging.redactHeader("Authorization");
-            logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
-            builder.addInterceptor(logging);
+            builder.addInterceptor(new SafeRequestLoggingInterceptor(
+                    message -> Log.d(TAG, message)));
         }
         return builder.build();
     }

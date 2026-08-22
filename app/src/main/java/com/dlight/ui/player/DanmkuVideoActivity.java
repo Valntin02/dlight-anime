@@ -28,6 +28,7 @@ import com.dlight.data.remote.ApiClient;
 import com.dlight.data.remote.ApiService;
 import com.dlight.data.remote.RetrofitClient;
 import com.dlight.network.HttpClientFactory;
+import com.dlight.network.NetworkConfig;
 import com.dlight.util.Param;
 import com.dlight.databinding.ActivityDanmakuLayoutBinding;
 import com.dlight.feature.comment.CommentFragment;
@@ -325,11 +326,7 @@ private void getDanmu() {
     //String json = String.format("{\"vod_id\":%d, \"vod_nid\":%d}", vod_id, vod_nid);
 
 
-    String baseUrl = Param.getInstance().getBaseUrl();
-    if (!baseUrl.endsWith("/")) {
-        baseUrl = baseUrl + "/";
-    }
-    String danmakuMobileUrl = baseUrl + "api/danmaku/get-mobile";
+    String danmakuMobileUrl = NetworkConfig.apiBaseUrl() + "api/danmaku/get-mobile";
 
     // 下载弹幕并设置
     OkHttpUtils.post()
