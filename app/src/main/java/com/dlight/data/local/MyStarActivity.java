@@ -50,9 +50,7 @@ public class MyStarActivity extends AppCompatActivity {
             //这里是为了复用videoAdapter所有通过这个for来添加数据
             for (MyStarRecord record : myStarRecordList) {
                 // 根据 `MyStarRecord` 获取 `VodData` 并添加到 `vodDataList`
-                VodData vodData = new VodData(record.getVod_id(), record.getVod_name(), record.getVod_pic(),
-                    record.getVod_play_url(), record.getVod_actor(), record.getVod_remarks(),
-                    record.getVod_year(), record.getVod_content(), record.getVod_total());
+                VodData vodData = record.toVodData();
                 vodDataList.add(vodData);
             }
 
@@ -90,9 +88,7 @@ public class MyStarActivity extends AppCompatActivity {
                     myStarRecordList=data.getData();
                     for (MyStarRecord record : myStarRecordList) {
                         // 根据 `MyStarRecord` 获取 `VodData` 并添加到 `vodDataList`
-                        VodData vodData = new VodData(record.getVod_id(), record.getVod_name(), record.getVod_pic(),
-                            record.getVod_play_url(), record.getVod_actor(), record.getVod_remarks(),
-                            record.getVod_year(), record.getVod_content(), record.getVod_total());
+                        VodData vodData = record.toVodData();
                         vodDataList.add(vodData);
                     }
                     videoAdapter.setVodDataList(vodDataList);

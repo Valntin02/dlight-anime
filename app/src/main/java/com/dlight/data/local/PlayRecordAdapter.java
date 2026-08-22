@@ -48,8 +48,7 @@ public class PlayRecordAdapter extends RecyclerView.Adapter<PlayRecordAdapter.Pl
 
         holder.ivCover.setOnClickListener(v->{
             Intent intent = new Intent(v.getContext(), DanmkuVideoActivity.class);
-            VodData video=new VodData(playRecord.getVod_id(),playRecord.getVod_name(),playRecord.getVod_pic(),playRecord.getVod_play_url(),
-                playRecord.getVod_actor(),playRecord.getVod_remarks(),playRecord.getVod_year(),playRecord.getVod_content(),playRecord.getVod_total());
+            VodData video = playRecord.toVodData();
             intent.putExtra("video_data", video);  // 传递单个 VodData 对象
             //传递了不取也不会报错，也不会造成内存泄露，但这里是将对象序列号字节流放进intent Bundle里面
             intent.putExtra("currentEpisode",playRecord.getEpisodeIndex());
