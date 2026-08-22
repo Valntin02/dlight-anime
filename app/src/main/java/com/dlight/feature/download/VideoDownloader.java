@@ -232,7 +232,9 @@ public class VideoDownloader {
             boolean allowPrivate) throws IOException {
         IOException lastError = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
+            File partFile = segmentPartFile(destination);
             try {
+                deleteIfExists(partFile);
                 throwIfPaused(pauseSignal);
                 try (Response response = openSegmentResponse(url, allowPrivate)) {
                     ResponseBody body = response.body();
@@ -254,6 +256,8 @@ public class VideoDownloader {
                         throw new IOException("下载被中断", interrupted);
                     }
                 }
+            } finally {
+                deleteIfExists(partFile);
             }
         }
         throw lastError == null ? new IOException("视频分片下载失败") : lastError;
@@ -261,7 +265,7 @@ public class VideoDownloader {
 
     static void writeSegment(InputStream input, File destination, PauseSignal pauseSignal)
             throws IOException {
-        File partFile = new File(destination.getParentFile(), destination.getName() + ".part");
+        File partFile = segmentPartFile(destination);
         deleteIfExists(partFile);
         boolean published = false;
         try {
@@ -334,6 +338,10 @@ public class VideoDownloader {
             partFile.delete();
             throw new IOException(errorMessage);
         }
+    }
+
+    private static File segmentPartFile(File destination) {
+        return new File(destination.getParentFile(), destination.getName() + ".part");
     }
 
     private static void deleteIfExists(File file) throws IOException {

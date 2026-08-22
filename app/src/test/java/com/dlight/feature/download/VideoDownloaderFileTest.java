@@ -77,6 +77,97 @@ public class VideoDownloaderFileTest {
     }
 
     @Test
+    public void pauseBeforeOpenRemovesStalePartAndPreservesCompletedDestination()
+            throws Exception {
+        File destination = new File(temporaryFolder.getRoot(), "0.ts");
+        write(destination, "verified");
+        File partFile = new File(destination.getPath() + ".part");
+        write(partFile, "stale");
+
+        try {
+            VideoDownloader.downloadSegment(
+                    "https://cdn.example.com/segment.ts", destination, () -> true, true);
+            fail("Expected IOException");
+        } catch (IOException expected) {
+            assertEquals("下载已暂停", expected.getMessage());
+        }
+
+        assertFalse(partFile.exists());
+        assertArrayEquals(bytes("verified"), Files.readAllBytes(destination.toPath()));
+    }
+
+    @Test
+    public void openFailureRemovesStalePartAndPreservesCompletedDestination() throws Exception {
+        File destination = new File(temporaryFolder.getRoot(), "0.ts");
+        write(destination, "verified");
+        File partFile = new File(destination.getPath() + ".part");
+        write(partFile, "stale");
+
+        try {
+            VideoDownloader.downloadSegment(
+                    "not-a-download-url", destination, null, true);
+            fail("Expected IOException");
+        } catch (IOException expected) {
+            assertEquals("下载地址无效", expected.getMessage());
+        }
+
+        assertFalse(partFile.exists());
+        assertArrayEquals(bytes("verified"), Files.readAllBytes(destination.toPath()));
+    }
+
+    @Test
+    public void retryFailureRemovesStalePartAndPreservesCompletedDestination() throws Exception {
+        JdkHttpServer server = newServer();
+        AtomicInteger requests = new AtomicInteger();
+        server.createContext("/segment.ts", exchange -> {
+            requests.incrementAndGet();
+            respond(exchange, 500, "failure");
+        });
+        server.start();
+        try {
+            File destination = new File(temporaryFolder.getRoot(), "0.ts");
+            write(destination, "verified");
+            File partFile = new File(destination.getPath() + ".part");
+            write(partFile, "stale");
+
+            try {
+                VideoDownloader.downloadSegment(
+                        serverBase(server) + "/segment.ts", destination, null, true);
+                fail("Expected IOException");
+            } catch (IOException expected) {
+                assertEquals("视频分片请求失败，HTTP 状态码: 500", expected.getMessage());
+            }
+
+            assertEquals(3, requests.get());
+            assertFalse(partFile.exists());
+            assertArrayEquals(bytes("verified"), Files.readAllBytes(destination.toPath()));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void successfulAttemptReplacesStalePartAndCompletedDestination() throws Exception {
+        JdkHttpServer server = newServer();
+        server.createContext("/segment.ts", exchange -> respond(exchange, 200, "replacement"));
+        server.start();
+        try {
+            File destination = new File(temporaryFolder.getRoot(), "0.ts");
+            write(destination, "verified");
+            File partFile = new File(destination.getPath() + ".part");
+            write(partFile, "stale");
+
+            VideoDownloader.downloadSegment(
+                    serverBase(server) + "/segment.ts", destination, null, true);
+
+            assertFalse(partFile.exists());
+            assertArrayEquals(bytes("replacement"), Files.readAllBytes(destination.toPath()));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     public void mergePublishesOnlyAfterAllSegmentsAreRead() throws Exception {
         File tempDirectory = temporaryFolder.newFolder("segments");
         write(new File(tempDirectory, "0.ts"), "first");
