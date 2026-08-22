@@ -12,9 +12,10 @@ def quoteBuildConfig = { String value ->
         .replace('\r', '\\r')
         .replace('\n', '\\n') + '"'
 }
-def validateApiBaseUrl = { String rawValue, String propertyName ->
+def validateApiBaseUrl = { String rawValue, String propertyName, boolean requireHttps ->
+    def allowedSchemes = requireHttps ? "https" : "http or https"
     if (rawValue == null || rawValue.trim().isEmpty()) {
-        throw new GradleException("Set -P${propertyName}=https://host/ for this build")
+        throw new GradleException("Set -P${propertyName} to an ${allowedSchemes} URL for this build")
     }
     if (containsControlCharacter(rawValue)) {
         throw new GradleException("${propertyName} must not contain control characters")
@@ -30,11 +31,13 @@ def validateApiBaseUrl = { String rawValue, String propertyName ->
 
     def scheme = uri.scheme
     def port = uri.port
-    if (!(scheme?.equalsIgnoreCase("http") || scheme?.equalsIgnoreCase("https"))
+    def validScheme = scheme?.equalsIgnoreCase("https")
+        || (!requireHttps && scheme?.equalsIgnoreCase("http"))
+    if (!validScheme
         || uri.host == null || uri.rawQuery != null || uri.rawFragment != null
         || port < -1 || port == 0 || port > 65535) {
         throw new GradleException(
-            "${propertyName} must use http or https, include a host and valid port, and omit query and fragment"
+            "${propertyName} must use ${allowedSchemes}, include a host and valid port, and omit query and fragment"
         )
     }
     value
@@ -108,13 +111,13 @@ android {
 
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     doFirst {
-        validateApiBaseUrl(releaseApiBaseUrl, "DLIGHT_RELEASE_API_BASE_URL")
+        validateApiBaseUrl(releaseApiBaseUrl, "DLIGHT_RELEASE_API_BASE_URL", true)
     }
 }
 
 tasks.matching { it.name == "preDebugBuild" }.configureEach {
     doFirst {
-        validateApiBaseUrl(debugApiBaseUrl, "DLIGHT_DEBUG_API_BASE_URL")
+        validateApiBaseUrl(debugApiBaseUrl, "DLIGHT_DEBUG_API_BASE_URL", false)
     }
 }
 

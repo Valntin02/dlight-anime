@@ -248,12 +248,8 @@ public class CommentFragment extends Fragment implements CommentAdapter.OnReplyC
                 if(data.getCode()==200){
                     List<UserAvatarData> temp=data.getData();
                     for (UserAvatarData t : temp) {
-                        String userAvatar = t.getUserAvatar();
-                        if (userAvatar != null && !userAvatar.startsWith("http")) {
-                            userAvatar = Param.getInstance().getBaseUrl() + userAvatar;
-                        }
                         Log.d("GetComment", "msg" + data);
-                        map.put(t.getUserId(), userAvatar);
+                        map.put(t.getUserId(), t.getUserAvatar());
                     }
                     //commentAdapter.notifyDataSetChanged();
                     organizeComments(commentDataList);
