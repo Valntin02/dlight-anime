@@ -109,6 +109,8 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
 }
 ```
 
+The Release pre-build validator must additionally require the `https` scheme because the main network security configuration rejects cleartext. Debug validation continues to allow `http` for the emulator backend.
+
 - [ ] **Step 3: Write the failing URL normalization tests**
 
 Create `NetworkConfigTest.java`:
@@ -639,6 +641,8 @@ Create the Debug override:
 ```
 
 Remove `android:usesCleartextTraffic="true"` from the main Manifest. Debug remains compatible with the local backend; Release rejects cleartext.
+
+Relative avatar paths must remain relative until `ImageUrlResolver` processes them; callers must not prepend the old HTTP `Param` base URL.
 
 - [ ] **Step 5: Remove unused high-risk permissions**
 
