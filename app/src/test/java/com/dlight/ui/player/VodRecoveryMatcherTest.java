@@ -28,6 +28,51 @@ public class VodRecoveryMatcherTest {
     }
 
     @Test
+    public void findBest_doesNotMatchZeroIdBeforeName() {
+        VodData current = vod(0, "Current");
+        VodData sameZeroId = vod(0, "Different");
+        VodData byName = vod(2, "Current");
+
+        assertSame(byName, VodRecoveryMatcher.findBest(current, Arrays.asList(sameZeroId, byName)));
+    }
+
+    @Test
+    public void findBest_doesNotMatchNegativeIdBeforeName() {
+        VodData current = vod(-1, "Current");
+        VodData sameNegativeId = vod(-1, "Different");
+        VodData byName = vod(2, "Current");
+
+        assertSame(byName, VodRecoveryMatcher.findBest(current, Arrays.asList(sameNegativeId, byName)));
+    }
+
+    @Test
+    public void findBest_returnsFirstDuplicatePositiveId() {
+        VodData current = vod(42, "Current");
+        VodData first = vod(42, "First");
+        VodData second = vod(42, "Second");
+
+        assertSame(first, VodRecoveryMatcher.findBest(current, Arrays.asList(first, second)));
+    }
+
+    @Test
+    public void findBest_returnsFirstDuplicateExactName() {
+        VodData current = vod(42, "Current");
+        VodData first = vod(1, "Current");
+        VodData second = vod(2, "Current");
+
+        assertSame(first, VodRecoveryMatcher.findBest(current, Arrays.asList(first, second)));
+    }
+
+    @Test
+    public void findBest_comparesNamesExactlyWithoutTrimming() {
+        VodData current = vod(42, " Current ");
+        VodData trimmed = vod(1, "Current");
+        VodData exact = vod(2, " Current ");
+
+        assertSame(exact, VodRecoveryMatcher.findBest(current, Arrays.asList(trimmed, exact)));
+    }
+
+    @Test
     public void findBest_returnsFirstNonNullCandidateWhenNothingMatches() {
         VodData current = vod(42, "Current");
         VodData first = vod(1, "First");

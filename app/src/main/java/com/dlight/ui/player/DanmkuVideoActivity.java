@@ -77,6 +77,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
 
     private int currentEpisode;
     private boolean recoveredOnce;
+    private retrofit2.Call<VodResModel> recoveryCall;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -263,15 +264,18 @@ public class DanmkuVideoActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
+        isDestory = true;
+        if (recoveryCall != null) {
+            recoveryCall.cancel();
+            recoveryCall = null;
+        }
         if (isPlay) {
             getCurPlay().release();
         }
         //GSYPreViewManager.instance().releaseMediaPlayer();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
-
-        isDestory = true;
+        super.onDestroy();
     }
 
 
@@ -409,10 +413,14 @@ private void getDanmu() {
         }
 
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
-        retrofit2.Call<VodResModel> call = apiService.requestRearchVodData(videoData.getVod_name());
-        ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodResModel>() {
+        recoveryCall = apiService.requestRearchVodData(videoData.getVod_name());
+        ApiClient.requestData(recoveryCall, new ApiClient.ApiResponseCallback<VodResModel>() {
             @Override
             public void onSuccess(VodResModel data) {
+                if (isDestory || isFinishing() || isDestroyed()) {
+                    return;
+                }
+                recoveryCall = null;
                 VodData matched = VodRecoveryMatcher.findBest(
                     videoData,
                     data == null ? null : data.getData()
@@ -432,6 +440,10 @@ private void getDanmu() {
 
             @Override
             public void onFailure(String error) {
+                if (isDestory || isFinishing() || isDestroyed()) {
+                    return;
+                }
+                recoveryCall = null;
                 Log.e("DanmkuVideoActivity", "recover playable source failed: " + error);
                 Toast.makeText(DanmkuVideoActivity.this, "当前视频暂无可播放地址", Toast.LENGTH_SHORT).show();
                 finish();
