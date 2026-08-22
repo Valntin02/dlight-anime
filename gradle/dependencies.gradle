@@ -1,14 +1,14 @@
 ext {
     gsyVideoVersion = "v10.0.0"
     danmakuFlameMasterSoVersion = "0.9.25"
-    glideVersion = "4.12.0"
+    glideVersion = "4.14.0"
     mediaVersion = "1.5.1"
     permissionsDispatcherVersion = "4.9.1"
 
     androidDependencies = [
-        recyclerView: "androidx.recyclerview:recyclerview:1.2.1",
+        recyclerView: "androidx.recyclerview:recyclerview:1.4.0",
         appCompat   : "androidx.appcompat:appcompat:1.6.0",
-        design      : "com.google.android.material:material:1.4.0",
+        design      : "com.google.android.material:material:1.12.0",
         viewpager2  : "androidx.viewpager2:viewpager2:1.0.0",
         core        : "androidx.core:core:1.7.0",
         transition  : "androidx.transition:transition:1.4.1",
@@ -55,7 +55,7 @@ ext {
 
     dataDependencies = [
         leakcanary                    : "com.squareup.leakcanary:leakcanary-android:2.7",
-        okhttp                        : "com.squareup.okhttp3:okhttp:4.11.0",
+        okhttp                        : "com.squareup.okhttp3:okhttp:4.12.0",
         okhttpUtil                    : "com.zhy:okhttputils:2.6.2",
 
         permissionsDispatcher         : "com.github.permissions-dispatcher:permissionsdispatcher:${permissionsDispatcherVersion}",

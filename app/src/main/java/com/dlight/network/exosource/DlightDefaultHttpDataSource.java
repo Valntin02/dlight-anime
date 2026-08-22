@@ -47,9 +47,6 @@ import java.net.HttpURLConnection;
 import java.net.NoRouteToHostException;
 import java.net.ProtocolException;
 import java.net.URL;
-import java.security.KeyManagementException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.CertificateException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -59,13 +56,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.SSLSocketFactory;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import com.dlight.network.model.User;
 
 /**
@@ -586,56 +576,7 @@ public class DlightDefaultHttpDataSource extends BaseDataSource implements HttpD
         boolean followRedirects,
         Map<String, String> requestParameters)
         throws IOException {
-        HttpURLConnection connection;
-        if (url.getProtocol().endsWith("https")) {
-            /**去除证书限制**/
-            connection = (HttpsURLConnection) url.openConnection();
-            ((HttpsURLConnection) connection).setHostnameVerifier(new HostnameVerifier() {
-                @Override
-                public boolean verify(String hostname, SSLSession session) {
-                    return true;
-                }
-            });
-            // Create a trust manager that does not validate certificate chains
-            final TrustManager[] trustAllCerts = new TrustManager[]{
-                new X509TrustManager() {
-                    @Override
-                    public void checkClientTrusted(java.security.cert.X509Certificate[] chain, String authType) throws CertificateException {
-                    }
-
-                    @Override
-                    public void checkServerTrusted(java.security.cert.X509Certificate[] chain, String authType) throws CertificateException {
-                    }
-
-                    @Override
-                    public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                        return null;
-                    }
-                }
-            };
-            // Install the all-trusting trust manager
-            final SSLContext sslContext;
-            try {
-                sslContext = SSLContext.getInstance("SSL");
-                sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-                // Create an ssl socket factory with our all-trusting manager
-                final SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
-                ((HttpsURLConnection) connection).setSSLSocketFactory(sslSocketFactory);
-                ((HttpsURLConnection) connection).setHostnameVerifier(new HostnameVerifier() {
-                    @Override
-                    public boolean verify(String hostname, SSLSession session) {
-                        return true;
-                    }
-                });
-            } catch (NoSuchAlgorithmException e) {
-                e.printStackTrace();
-            } catch (KeyManagementException e) {
-                e.printStackTrace();
-            }
-            /**去除证书限制**/
-        } else {
-            connection = (HttpURLConnection) url.openConnection();
-        }
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
 
         connection.setConnectTimeout(connectTimeoutMillis);
         connection.setReadTimeout(readTimeoutMillis);
