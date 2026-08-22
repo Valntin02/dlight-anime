@@ -46,9 +46,23 @@ public final class DownloadUrlPolicy {
                     || address.isLoopbackAddress()
                     || address.isLinkLocalAddress()
                     || address.isSiteLocalAddress()
-                    || address.isMulticastAddress()) {
+                    || address.isMulticastAddress()
+                    || isAdditionalPrivateRange(address)) {
                 throw new IOException("下载地址指向私有或本地地址");
             }
         }
+    }
+
+    private static boolean isAdditionalPrivateRange(InetAddress address) {
+        byte[] bytes = address.getAddress();
+        if (bytes.length == 16) {
+            return (bytes[0] & 0xfe) == 0xfc;
+        }
+        if (bytes.length == 4) {
+            int first = bytes[0] & 0xff;
+            int second = bytes[1] & 0xff;
+            return first == 100 && second >= 64 && second <= 127;
+        }
+        return false;
     }
 }

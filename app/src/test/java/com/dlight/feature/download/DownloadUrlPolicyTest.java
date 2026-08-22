@@ -19,15 +19,19 @@ public class DownloadUrlPolicyTest {
         assertBlocked("http://127.0.0.1/video.ts");
         assertBlocked("http://localhost/video.ts");
         assertBlocked("http://10.1.2.3/video.ts");
+        assertBlocked("http://100.64.0.1/video.ts");
         assertBlocked("http://169.254.1.2/video.ts");
         assertBlocked("http://224.0.0.1/video.ts");
+        assertBlocked("http://[fd12::1]/video.ts");
     }
 
     @Test
     public void allowPrivateOnlyAppliesSyntaxValidation() throws Exception {
         DownloadUrlPolicy.validate(URI.create("http://localhost/video.ts"), true);
         DownloadUrlPolicy.validate(URI.create("http://10.1.2.3/video.ts"), true);
+        DownloadUrlPolicy.validate(URI.create("http://100.64.0.1/video.ts"), true);
         DownloadUrlPolicy.validate(URI.create("http://169.254.1.2/video.ts"), true);
+        DownloadUrlPolicy.validate(URI.create("http://[fd12::1]/video.ts"), true);
     }
 
     @Test
