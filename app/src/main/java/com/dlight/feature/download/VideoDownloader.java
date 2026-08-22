@@ -2,6 +2,8 @@ package com.dlight.feature.download;
 
 import android.content.Context;
 
+import com.dlight.BuildConfig;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
@@ -9,11 +11,16 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,6 +40,7 @@ public class VideoDownloader {
         boolean isPauseRequested();
     }
     private static final int THREAD_POOL_SIZE = 10;
+    private static final int MAX_SEGMENT_REDIRECTS = 5;
     //普通文件下载
     public static void download(String urlStr, File originDest, Context context, DownloadCallback callback) {
         // 设置文件的保存路径
@@ -243,13 +251,17 @@ public class VideoDownloader {
 
     private static void downloadSegment(String url, File destination, PauseSignal pauseSignal)
         throws IOException {
+        downloadSegment(url, destination, pauseSignal, BuildConfig.DEBUG);
+    }
+
+    static void downloadSegment(String url, File destination, PauseSignal pauseSignal,
+            boolean allowPrivate) throws IOException {
         IOException lastError = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
+            HttpURLConnection connection = null;
             try {
                 throwIfPaused(pauseSignal);
-                URLConnection connection = new URL(url).openConnection();
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(30000);
+                connection = openSegmentConnection(url, allowPrivate);
                 try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
                      FileOutputStream out = new FileOutputStream(destination, false)) {
                     byte[] buffer = new byte[8192];
@@ -273,9 +285,95 @@ public class VideoDownloader {
                         throw new IOException("下载被中断", interrupted);
                     }
                 }
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
         }
         throw lastError == null ? new IOException("视频分片下载失败") : lastError;
+    }
+
+    private static HttpURLConnection openSegmentConnection(String url, boolean allowPrivate)
+            throws IOException {
+        URI currentUri = parseDownloadUri(url);
+        Set<URI> visited = new HashSet<>();
+        visited.add(currentUri);
+        int redirectCount = 0;
+
+        while (true) {
+            DownloadUrlPolicy.validate(currentUri, allowPrivate);
+            HttpURLConnection connection = (HttpURLConnection) currentUri.toURL().openConnection();
+            boolean keepConnection = false;
+            try {
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                int status = connection.getResponseCode();
+                if (!isRedirect(status)) {
+                    keepConnection = true;
+                    return connection;
+                }
+
+                closeResponseBody(connection);
+                if (redirectCount >= MAX_SEGMENT_REDIRECTS) {
+                    throw new IOException("视频分片重定向次数过多");
+                }
+                String location = connection.getHeaderField("Location");
+                if (location == null || location.trim().isEmpty()) {
+                    throw new IOException("视频分片重定向缺少 Location");
+                }
+
+                final URI nextUri;
+                try {
+                    nextUri = currentUri.resolve(location);
+                } catch (IllegalArgumentException error) {
+                    throw new IOException("视频分片重定向地址无效", error);
+                }
+                DownloadUrlPolicy.validate(nextUri, allowPrivate);
+                if (!visited.add(nextUri)) {
+                    throw new IOException("视频分片重定向循环");
+                }
+                currentUri = nextUri;
+                redirectCount++;
+            } finally {
+                if (!keepConnection) {
+                    connection.disconnect();
+                }
+            }
+        }
+    }
+
+    private static boolean isRedirect(int status) {
+        return status == HttpURLConnection.HTTP_MOVED_PERM
+                || status == HttpURLConnection.HTTP_MOVED_TEMP
+                || status == HttpURLConnection.HTTP_SEE_OTHER
+                || status == 307
+                || status == 308;
+    }
+
+    private static void closeResponseBody(HttpURLConnection connection) {
+        InputStream stream = connection.getErrorStream();
+        if (stream == null) {
+            try {
+                stream = connection.getInputStream();
+            } catch (IOException ignored) {
+                return;
+            }
+        }
+        try {
+            stream.close();
+        } catch (IOException ignored) {
+            // The caller disconnects the connection immediately afterwards.
+        }
+    }
+
+    private static URI parseDownloadUri(String url) throws IOException {
+        try {
+            return URI.create(url);
+        } catch (IllegalArgumentException | NullPointerException error) {
+            throw new IOException("下载地址无效", error);
+        }
     }
 
     private static String sanitizeFileName(String fileName) {
