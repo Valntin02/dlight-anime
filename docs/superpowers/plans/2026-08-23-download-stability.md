@@ -89,8 +89,13 @@ Reject unsupported constructs before returning:
 ```java
 if (upper.startsWith("#EXT-X-MAP")) throw new IOException("暂不支持 fMP4 下载");
 if (upper.startsWith("#EXT-X-BYTERANGE")) throw new IOException("暂不支持字节范围分片");
-if (upper.startsWith("#EXT-X-KEY") && !upper.contains("METHOD=NONE")) {
-    throw new IOException("暂不支持加密 HLS 下载");
+if (upper.startsWith("#EXT-X-KEY")) {
+    // Parse the METHOD attribute exactly; substrings such as METHOD=NONEE or
+    // METHOD=NONE inside a quoted URI must not bypass encryption rejection.
+    String method = parseMethodAttribute(line);
+    if (!"NONE".equalsIgnoreCase(method)) {
+        throw new IOException("暂不支持加密 HLS 下载");
+    }
 }
 ```
 
