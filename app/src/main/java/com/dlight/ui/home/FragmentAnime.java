@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.dlight.R;
 import com.dlight.data.remote.RetrofitClient;
 import com.dlight.data.model.VodData;
+import com.dlight.ui.widget.LoadStateView;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,7 @@ import com.dlight.data.remote.ApiService;
 public class FragmentAnime extends Fragment {
 
     private RecyclerView recyclerView;
+    private LoadStateView loadStateView;
     private VideoAdapter videoAdapter;
 
     private RecyclerView recyclerViewYears;
@@ -38,6 +40,7 @@ public class FragmentAnime extends Fragment {
     //这里的page 和SQL不一样 php里面做了封装 从1开始，page等于多少 就等于求第多少页
     int page=1,limit=36,total=0,totalPage=0;
     boolean flagRequest=false; //表示是否可以请求
+    private Call<VodPageResModel> activeCall;
     // 当前年份过滤的 API key; null = 全部 (后端不带 year 参数)
     private String currentYear = null;
     // UI 标签 (中文展示用)
@@ -68,10 +71,12 @@ public class FragmentAnime extends Fragment {
 
         //视频展示模块
         recyclerView = view.findViewById(R.id.recycler_view_videos);
+        loadStateView = view.findViewById(R.id.anime_load_state);
         // 使用 GridLayoutManager 设置列数为 3
         recyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 3));
         videoAdapter = new VideoAdapter(vodDataList);
         recyclerView.setAdapter(videoAdapter);
+        loadStateView.setOnRetryListener(retryView -> getVideoPage());
         getVideoPage();
 
         recyclerView.setOnScrollListener(new RecyclerView.OnScrollListener() {
@@ -106,31 +111,62 @@ public class FragmentAnime extends Fragment {
 
 
     private void getVideoPage() {
-        if(flagRequest) return;
+        if (flagRequest) {
+            if (!HomeLoadStatePolicy.hasContent(vodDataList)) {
+                loadStateView.showEmpty(null);
+            }
+            return;
+        }
 
+        boolean pagination = HomeLoadStatePolicy.hasContent(vodDataList);
+        if (!pagination) {
+            loadStateView.showLoading(null);
+        }
         flagRequest=true;
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
         // currentYear 为 null 时 Retrofit 会自动省略该 query 参数
         Call<VodPageResModel> call = apiService.requestVideoPage(page, limit, currentYear);
+        activeCall = call;
 
         ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodPageResModel>() {
             @Override
             public void onSuccess(VodPageResModel data) {
+                if (!canHandle(call)) return;
+                activeCall = null;
                 Log.d("FragmentAnime", "msg" + data);
-                vodDataList.addAll(data.getVodDataList());
+                List<VodData> items = data == null ? null : data.getVodDataList();
+                if (items != null) {
+                    vodDataList.addAll(items);
+                }
                 page++;
-                total=data.getTotal();
-                totalPage=data.getTotalPage();
+                total=data == null ? 0 : data.getTotal();
+                totalPage=data == null ? 0 : data.getTotalPage();
                 videoAdapter.notifyDataSetChanged();
                 flagRequest=false;
+
+                if (HomeLoadStatePolicy.hasContent(vodDataList)) {
+                    loadStateView.hide();
+                } else {
+                    loadStateView.showEmpty(null);
+                }
 
                 if(page>totalPage) flagRequest=true;
             }
 
             @Override
             public void onFailure(String error) {
+                if (!canHandle(call)) return;
+                activeCall = null;
                 flagRequest=false;
                 Log.e("FragmentAnime", "Error: " + error);
+                if (HomeLoadStatePolicy.shouldPreserveContentOnError(
+                    pagination,
+                    HomeLoadStatePolicy.hasContent(vodDataList)
+                )) {
+                    loadStateView.hide();
+                } else {
+                    loadStateView.showError(null);
+                }
             }
         });
     }
@@ -141,6 +177,10 @@ public class FragmentAnime extends Fragment {
         if ((next == null && currentYear == null) || (next != null && next.equals(currentYear))) {
             return;
         }
+        if (activeCall != null) {
+            activeCall.cancel();
+            activeCall = null;
+        }
         currentYear = next;
         page = 1;
         flagRequest = false;
@@ -148,6 +188,31 @@ public class FragmentAnime extends Fragment {
         videoAdapter.notifyDataSetChanged();
         recyclerView.scrollToPosition(0);
         getVideoPage();
+    }
+
+    private boolean canHandle(Call<VodPageResModel> call) {
+        return activeCall == call
+            && isAdded()
+            && recyclerView != null
+            && videoAdapter != null
+            && loadStateView != null;
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (activeCall != null) {
+            activeCall.cancel();
+            activeCall = null;
+            flagRequest = false;
+        }
+        if (loadStateView != null) {
+            loadStateView.setOnRetryListener(null);
+        }
+        recyclerView = null;
+        recyclerViewYears = null;
+        loadStateView = null;
+        videoAdapter = null;
+        super.onDestroyView();
     }
 
     /**

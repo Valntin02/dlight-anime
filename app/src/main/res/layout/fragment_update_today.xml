@@ -14,12 +14,22 @@
             android:padding="7dp"/>
 
     <!-- 视频列表 -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler_view_videos"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="190dp"
-        android:orientation="horizontal"
-        android:layout_weight="1"/>
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recycler_view_videos"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal" />
+
+        <com.dlight.ui.widget.LoadStateView
+            android:id="@+id/today_load_state"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
 
 </LinearLayout>
