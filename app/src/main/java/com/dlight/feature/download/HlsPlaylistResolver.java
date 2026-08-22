@@ -23,7 +23,11 @@ public final class HlsPlaylistResolver {
     }
 
     public static List<String> resolve(String playlistUrl) throws IOException {
-        final boolean allowPrivate = BuildConfig.DEBUG;
+        return resolveNetwork(playlistUrl, BuildConfig.DEBUG);
+    }
+
+    static List<String> resolveNetwork(String playlistUrl, boolean allowPrivate)
+            throws IOException {
         return resolve(playlistUrl,
                 url -> fetchOverNetwork(url, allowPrivate), 0, allowPrivate);
     }

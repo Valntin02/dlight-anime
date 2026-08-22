@@ -173,7 +173,7 @@ public class HlsPlaylistResolverTest {
             String base = serverBase(server);
 
             assertEquals(Arrays.asList(base + "/new/segment.ts"),
-                    HlsPlaylistResolver.resolve(base + "/old"));
+                    HlsPlaylistResolver.resolveNetwork(base + "/old", true));
         } finally {
             server.stop(0);
         }
@@ -193,25 +193,25 @@ public class HlsPlaylistResolverTest {
             assertFails("播放列表重定向循环", new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/loop-a");
+                    HlsPlaylistResolver.resolveNetwork(base + "/loop-a", true);
                 }
             });
             assertFails("播放列表重定向缺少 Location", new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/missing-location");
+                    HlsPlaylistResolver.resolveNetwork(base + "/missing-location", true);
                 }
             });
             assertFails("播放列表请求失败，HTTP 状态码: 404", new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/not-found");
+                    HlsPlaylistResolver.resolveNetwork(base + "/not-found", true);
                 }
             });
             assertFails("播放列表请求失败，HTTP 状态码: 206", new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/partial");
+                    HlsPlaylistResolver.resolveNetwork(base + "/partial", true);
                 }
             });
         } finally {
@@ -232,7 +232,7 @@ public class HlsPlaylistResolverTest {
             assertFails("播放列表重定向次数过多", new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/hop-0");
+                    HlsPlaylistResolver.resolveNetwork(base + "/hop-0", true);
                 }
             });
         } finally {
@@ -261,15 +261,35 @@ public class HlsPlaylistResolverTest {
             assertAnyIOException(new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/disconnect");
+                    HlsPlaylistResolver.resolveNetwork(base + "/disconnect", true);
                 }
             });
             assertFails("播放列表内容过大", new ThrowingRunnable() {
                 @Override
                 public void run() throws Exception {
-                    HlsPlaylistResolver.resolve(base + "/oversized");
+                    HlsPlaylistResolver.resolveNetwork(base + "/oversized", true);
                 }
             });
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void networkPolicyRejectsLocalhostWhenPrivateAddressesAreDisabled() throws Exception {
+        JdkHttpServer server = newServer();
+        server.createContext("/media.m3u8", response(200, "#EXTM3U\nsegment.ts\n"));
+        server.start();
+        try {
+            final String url = serverBase(server) + "/media.m3u8";
+            assertFails("下载地址指向私有或本地地址", new ThrowingRunnable() {
+                @Override
+                public void run() throws Exception {
+                    HlsPlaylistResolver.resolveNetwork(url, false);
+                }
+            });
+            assertEquals(Arrays.asList(serverBase(server) + "/segment.ts"),
+                    HlsPlaylistResolver.resolveNetwork(url, true));
         } finally {
             server.stop(0);
         }
