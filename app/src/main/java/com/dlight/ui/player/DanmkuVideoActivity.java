@@ -47,7 +47,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.util.ArrayList;
-import java.util.List;
 
 
 import okhttp3.Call;
@@ -414,7 +413,10 @@ private void getDanmu() {
         ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodResModel>() {
             @Override
             public void onSuccess(VodResModel data) {
-                VodData matched = findBestMatchedVod(data == null ? null : data.getData());
+                VodData matched = VodRecoveryMatcher.findBest(
+                    videoData,
+                    data == null ? null : data.getData()
+                );
                 if (matched == null) {
                     Toast.makeText(DanmkuVideoActivity.this, "当前视频暂无可播放地址", Toast.LENGTH_SHORT).show();
                     finish();
@@ -435,26 +437,6 @@ private void getDanmu() {
                 finish();
             }
         });
-    }
-
-    private VodData findBestMatchedVod(List<VodData> candidates) {
-        if (candidates == null || candidates.isEmpty() || videoData == null) {
-            return null;
-        }
-        for (VodData item : candidates) {
-            if (item != null && item.getVod_id() == videoData.getVod_id()) {
-                return item;
-            }
-        }
-        for (VodData item : candidates) {
-            if (item == null) {
-                continue;
-            }
-            if (TextUtils.equals(item.getVod_name(), videoData.getVod_name())) {
-                return item;
-            }
-        }
-        return candidates.get(0);
     }
 
     private void savePlayRecordIfNeeded(int episodeIndex) {
