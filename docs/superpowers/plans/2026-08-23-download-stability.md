@@ -117,7 +117,9 @@ git commit -m "feat: add deterministic HLS playlist parser"
 
 **Files:**
 - Create: `app/src/main/java/com/dlight/feature/download/HlsPlaylistResolver.java`
+- Create: `app/src/main/java/com/dlight/feature/download/DownloadUrlPolicy.java`
 - Create: `app/src/test/java/com/dlight/feature/download/HlsPlaylistResolverTest.java`
+- Create: `app/src/test/java/com/dlight/feature/download/DownloadUrlPolicyTest.java`
 - Modify: `app/src/main/java/com/dlight/feature/download/VideoDownloader.java`
 
 - [ ] **Step 1: Write failing bounded-resolution tests**
@@ -146,7 +148,7 @@ Run the focused resolver test. Expected: class-not-found compilation failure.
 
 - [ ] **Step 3: Implement HlsPlaylistResolver**
 
-Public production entry and package test entry:
+Public production entry and package test entry return and consume an immutable fetched document containing both content and the final response URI:
 
 ```java
 public static List<String> resolve(String playlistUrl) throws IOException {
@@ -157,7 +159,9 @@ static List<String> resolve(String playlistUrl, PlaylistFetcher fetcher, int dep
     throws IOException
 ```
 
-Reject depth greater than three. Fetch UTF-8 text with 15-second connect/read timeouts, parse it with `HlsPlaylistParser`, return media segments, or recurse into `variants.get(0)`. Return an unmodifiable segment list.
+Reject depth greater than three. Fetch UTF-8 text with 15-second connect/read timeouts and a 2 MiB streaming limit. Handle at most five redirects manually, validate every hop, accept only HTTP 200, and parse relative URIs against the final response URI. Return media segments, or recurse into `variants.get(0)`. Return an unmodifiable segment list.
+
+`DownloadUrlPolicy` allows private addresses in Debug for emulator development. In Release it resolves every host and rejects any-local, loopback, link-local, site-local/private, and multicast addresses. Apply the policy to the initial playlist, every redirect, every nested playlist, and every segment before transfer.
 
 - [ ] **Step 4: Replace VideoDownloader's private playlist traversal**
 
