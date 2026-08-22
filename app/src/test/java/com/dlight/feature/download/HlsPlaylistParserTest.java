@@ -109,6 +109,86 @@ public class HlsPlaylistParserTest {
     }
 
     @Test
+    public void rejectsDuplicateOrMalformedKeyAttributes() throws Exception {
+        assertParseFails(
+                "#EXTM3U\n#EXT-X-KEY:METHOD=NONE,method=AES-128\nsegment.ts\n",
+                "播放列表属性重复");
+        assertParseFails(
+                "#EXTM3U\n#EXT-X-KEY:METHOD=NONE,URI=\"unterminated\nsegment.ts\n",
+                "播放列表属性引号未闭合");
+        assertParseFails(
+                "#EXTM3U\n#EXT-X-KEY:METHOD=NONE,BROKEN\nsegment.ts\n",
+                "播放列表属性格式无效");
+        assertParseFails(
+                "#EXTM3U\n#EXT-X-KEY:METHOD=NONE,=value\nsegment.ts\n",
+                "播放列表属性格式无效");
+    }
+
+    @Test
+    public void parsesBandwidthOnlyFromExactValidatedAttribute() throws Exception {
+        HlsPlaylistParser.Result result = HlsPlaylistParser.parse(
+                "#EXTM3U\n"
+                        + "#EXT-X-STREAM-INF:AUDIO=\"group,BANDWIDTH=999999\",BANDWIDTH=10\n"
+                        + "variant.m3u8\n",
+                URI.create("https://cdn.example.com/master.m3u8"));
+
+        assertEquals(10L, result.getVariants().get(0).getBandwidth());
+        assertParseFails(
+                "#EXTM3U\n#EXT-X-STREAM-INF:AUDIO=\"group,BANDWIDTH=9\"\nv.m3u8\n",
+                "播放列表 BANDWIDTH 无效");
+        assertParseFails("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=0\nv.m3u8\n",
+                "播放列表 BANDWIDTH 无效");
+        assertParseFails("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=-1\nv.m3u8\n",
+                "播放列表 BANDWIDTH 无效");
+        assertParseFails("#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=fast\nv.m3u8\n",
+                "播放列表 BANDWIDTH 无效");
+        assertParseFails(
+                "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=999999999999999999999\nv.m3u8\n",
+                "播放列表 BANDWIDTH 无效");
+    }
+
+    @Test
+    public void ignoresTagsThatOnlyShareANamePrefix() throws Exception {
+        HlsPlaylistParser.Result result = HlsPlaylistParser.parse(
+                "#EXTM3U\n"
+                        + "#EXT-X-MAPPING:URI=\"init.mp4\"\n"
+                        + "#EXT-X-BYTERANGE-FOO:100\n"
+                        + "#EXT-X-KEYFORMAT:METHOD=AES-128\n"
+                        + "#EXT-X-STREAM-INFORMATION:BANDWIDTH=10\n"
+                        + "#EXT-X-STREAM-INF\n"
+                        + "segment.ts\n",
+                URI.create("https://cdn.example.com/master.m3u8"));
+
+        assertEquals(Collections.singletonList("https://cdn.example.com/segment.ts"),
+                result.getSegments());
+        assertTrue(result.getVariants().isEmpty());
+    }
+
+    @Test
+    public void rejectsOversizedContentAndLines() throws Exception {
+        assertParseFails(repeat('x', HlsPlaylistParser.MAX_CONTENT_CHARS + 1),
+                "播放列表内容过大");
+        assertParseFails("#EXTM3U\n" + repeat('x', HlsPlaylistParser.MAX_LINE_CHARS + 1),
+                "播放列表行过长");
+
+        StringBuilder tooManyLines = new StringBuilder("#EXTM3U\n");
+        for (int index = 0; index < HlsPlaylistParser.MAX_LINES; index++) {
+            tooManyLines.append("#\n");
+        }
+        assertParseFails(tooManyLines.toString(), "播放列表行数过多");
+    }
+
+    @Test
+    public void rejectsTooManyUriEntries() throws Exception {
+        StringBuilder playlist = new StringBuilder("#EXTM3U\n");
+        for (int index = 0; index <= HlsPlaylistParser.MAX_URI_ENTRIES; index++) {
+            playlist.append("segment\n");
+        }
+
+        assertParseFails(playlist.toString(), "播放列表 URI 条目过多");
+    }
+
+    @Test
     public void emptyOrInvalidDocumentReturnsEmptyResult() throws Exception {
         HlsPlaylistParser.Result empty = HlsPlaylistParser.parse(
                 " \n# just a comment\n", URI.create("https://cdn.example.com/master.m3u8"));
@@ -167,6 +247,21 @@ public class HlsPlaylistParserTest {
         } catch (IOException error) {
             assertEquals(expectedMessage, error.getMessage());
         }
+    }
+
+    private static void assertParseFails(String content, String expectedMessage) throws Exception {
+        try {
+            HlsPlaylistParser.parse(content, URI.create("https://cdn.example.com/master.m3u8"));
+            fail("Expected IOException");
+        } catch (IOException error) {
+            assertEquals(expectedMessage, error.getMessage());
+        }
+    }
+
+    private static String repeat(char character, int count) {
+        char[] characters = new char[count];
+        Arrays.fill(characters, character);
+        return new String(characters);
     }
 
     private static void assertInvalidBase(String base) throws Exception {

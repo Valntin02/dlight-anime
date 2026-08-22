@@ -1,26 +1,41 @@
 package com.dlight.feature.download;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Map;
+import java.util.TreeMap;
 
 public final class HlsPlaylistParser {
-    private static final Pattern BANDWIDTH_PATTERN = Pattern.compile(
-            "(?:^|,)\\s*BANDWIDTH\\s*=\\s*(\\d+)\\s*(?:,|$)",
-            Pattern.CASE_INSENSITIVE);
+    static final int MAX_CONTENT_CHARS = 2 * 1024 * 1024;
+    static final int MAX_LINE_CHARS = 8192;
+    static final int MAX_LINES = 100000;
+    static final int MAX_URI_ENTRIES = 20000;
+
+    private static final String TAG_MAP = "#EXT-X-MAP";
+    private static final String TAG_BYTERANGE = "#EXT-X-BYTERANGE";
+    private static final String TAG_KEY = "#EXT-X-KEY";
+    private static final String TAG_STREAM_INF = "#EXT-X-STREAM-INF";
+
     private HlsPlaylistParser() {
     }
 
     public static Result parse(String content, URI baseUri) throws IOException {
         validateHttpUri(baseUri, "播放列表地址无效");
 
-        if (content == null || content.trim().isEmpty()) {
+        if (content == null) {
+            return new Result(Collections.<String>emptyList(), Collections.<Variant>emptyList());
+        }
+        if (content.length() > MAX_CONTENT_CHARS) {
+            throw new IOException("播放列表内容过大");
+        }
+        if (content.trim().isEmpty()) {
             return new Result(Collections.<String>emptyList(), Collections.<Variant>emptyList());
         }
 
@@ -29,8 +44,20 @@ public final class HlsPlaylistParser {
         boolean hasHeader = false;
         boolean hasMasterMarker = false;
         Long pendingBandwidth = null;
+        int lineCount = 0;
+        int uriEntryCount = 0;
 
-        for (String rawLine : content.split("\\r?\\n")) {
+        BufferedReader reader = new BufferedReader(new StringReader(content));
+        String rawLine;
+        while ((rawLine = reader.readLine()) != null) {
+            lineCount++;
+            if (lineCount > MAX_LINES) {
+                throw new IOException("播放列表行数过多");
+            }
+            if (rawLine.length() > MAX_LINE_CHARS) {
+                throw new IOException("播放列表行过长");
+            }
+
             String line = rawLine.trim();
             if (line.isEmpty()) {
                 continue;
@@ -41,18 +68,22 @@ public final class HlsPlaylistParser {
                 hasHeader = true;
                 continue;
             }
-            if (upper.startsWith("#EXT-X-MAP")) {
+            if (isTag(upper, TAG_MAP)) {
                 throw new IOException("暂不支持 fMP4 下载");
             }
-            if (upper.startsWith("#EXT-X-BYTERANGE")) {
+            if (isTag(upper, TAG_BYTERANGE)) {
                 throw new IOException("暂不支持字节范围分片");
             }
-            if (upper.startsWith("#EXT-X-KEY") && !hasNoEncryptionMethod(line)) {
-                throw new IOException("暂不支持加密 HLS 下载");
+            if (isTag(upper, TAG_KEY)) {
+                Map<String, String> attributes = parseAttributeList(attributesAfterColon(line));
+                if (!"NONE".equalsIgnoreCase(attributes.get("METHOD"))) {
+                    throw new IOException("暂不支持加密 HLS 下载");
+                }
+                continue;
             }
-            if (upper.startsWith("#EXT-X-STREAM-INF")) {
+            if (hasTagAttributes(upper, TAG_STREAM_INF)) {
                 hasMasterMarker = true;
-                pendingBandwidth = parseBandwidth(line);
+                pendingBandwidth = parseBandwidth(attributesAfterColon(line));
                 continue;
             }
             if (line.startsWith("#")) {
@@ -64,6 +95,10 @@ public final class HlsPlaylistParser {
             pendingBandwidth = null;
             if (upper.contains("ADJUMP")) {
                 continue;
+            }
+            uriEntryCount++;
+            if (uriEntryCount > MAX_URI_ENTRIES) {
+                throw new IOException("播放列表 URI 条目过多");
             }
 
             String url = resolveUri(baseUri, line);
@@ -89,30 +124,41 @@ public final class HlsPlaylistParser {
         return new Result(segments, Collections.<Variant>emptyList());
     }
 
-    private static long parseBandwidth(String streamInfLine) {
-        int colon = streamInfLine.indexOf(':');
-        String attributes = colon >= 0 ? streamInfLine.substring(colon + 1) : "";
-        Matcher matcher = BANDWIDTH_PATTERN.matcher(attributes);
-        if (!matcher.find()) {
-            return 0L;
+    private static boolean isTag(String upperLine, String tag) {
+        return upperLine.equals(tag) || upperLine.startsWith(tag + ":");
+    }
+
+    private static boolean hasTagAttributes(String upperLine, String tag) {
+        return upperLine.startsWith(tag + ":");
+    }
+
+    private static String attributesAfterColon(String line) {
+        int colon = line.indexOf(':');
+        return colon < 0 ? "" : line.substring(colon + 1);
+    }
+
+    private static long parseBandwidth(String attributeList) throws IOException {
+        String value = parseAttributeList(attributeList).get("BANDWIDTH");
+        if (value == null) {
+            throw new IOException("播放列表 BANDWIDTH 无效");
         }
         try {
-            return Long.parseLong(matcher.group(1));
-        } catch (NumberFormatException ignored) {
-            return 0L;
+            long bandwidth = Long.parseLong(value);
+            if (bandwidth <= 0) {
+                throw new IOException("播放列表 BANDWIDTH 无效");
+            }
+            return bandwidth;
+        } catch (NumberFormatException error) {
+            throw new IOException("播放列表 BANDWIDTH 无效", error);
         }
     }
 
-    private static boolean hasNoEncryptionMethod(String keyLine) {
-        int colon = keyLine.indexOf(':');
-        if (colon < 0) {
-            return false;
+    private static Map<String, String> parseAttributeList(String attributes) throws IOException {
+        Map<String, String> values = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        if (attributes.trim().isEmpty()) {
+            return values;
         }
-        String method = findAttributeValue(keyLine.substring(colon + 1), "METHOD");
-        return "NONE".equalsIgnoreCase(method);
-    }
 
-    private static String findAttributeValue(String attributes, String targetKey) {
         StringBuilder token = new StringBuilder();
         boolean inQuotes = false;
         boolean escaped = false;
@@ -120,10 +166,7 @@ public final class HlsPlaylistParser {
         for (int index = 0; index < attributes.length(); index++) {
             char character = attributes.charAt(index);
             if (character == ',' && !inQuotes) {
-                String value = valueIfMatchingToken(token.toString(), targetKey);
-                if (value != null) {
-                    return value;
-                }
+                addAttributeToken(values, token.toString());
                 token.setLength(0);
                 continue;
             }
@@ -137,13 +180,26 @@ public final class HlsPlaylistParser {
                 inQuotes = !inQuotes;
             }
         }
-        return valueIfMatchingToken(token.toString(), targetKey);
+        if (inQuotes) {
+            throw new IOException("播放列表属性引号未闭合");
+        }
+        addAttributeToken(values, token.toString());
+        return values;
     }
 
-    private static String valueIfMatchingToken(String token, String targetKey) {
+    private static void addAttributeToken(Map<String, String> values, String token)
+            throws IOException {
         int equals = token.indexOf('=');
-        if (equals < 0 || !targetKey.equalsIgnoreCase(token.substring(0, equals).trim())) {
-            return null;
+        if (equals < 0) {
+            throw new IOException("播放列表属性格式无效");
+        }
+
+        String key = token.substring(0, equals).trim();
+        if (key.isEmpty()) {
+            throw new IOException("播放列表属性格式无效");
+        }
+        if (values.containsKey(key)) {
+            throw new IOException("播放列表属性重复");
         }
 
         String value = token.substring(equals + 1).trim();
@@ -151,7 +207,7 @@ public final class HlsPlaylistParser {
                 && value.charAt(value.length() - 1) == '"') {
             value = value.substring(1, value.length() - 1).trim();
         }
-        return value;
+        values.put(key, value);
     }
 
     private static String resolveUri(URI baseUri, String value) throws IOException {
