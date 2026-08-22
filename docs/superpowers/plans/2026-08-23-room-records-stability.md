@@ -56,7 +56,7 @@ Add a package-visible test hook that closes and nulls the singleton; production 
 
 1. Return when the SharedPreferences marker is true.
 2. If `context.getDatabasePath(LEGACY_DB_NAME)` does not exist, mark success without creating the file.
-3. Copy the legacy main file and any existing WAL/SHM sidecars to an App cache snapshot, then open only that snapshot read-only with `SQLiteDatabase`. This avoids Android creating sidecars or changing timestamps beside the original legacy file. Validate the expected tables and required columns before mapping cursor rows; schema mismatch aborts without setting the marker.
+3. Copy the legacy main file and any existing WAL/SHM sidecars to an App cache snapshot, then open only that snapshot read-only with `SQLiteDatabase`. Capture existence, length, and full SHA-256 for all three source files before and after copying; accept only a stable set, retry at most three times, and fail without a marker if the source keeps changing. This avoids Android creating sidecars or changing timestamps beside the original legacy file while preventing checkpoint/WAL races from producing an incomplete snapshot. Validate the expected tables and required columns before mapping cursor rows; schema mismatch aborts without setting the marker.
 4. For each legacy play record, query canonical by `(userId, vod_id)`; when absent, set copied ID to `0` and insert.
 5. Repeat for favorites.
 6. Close the snapshot database and remove temporary snapshot files in `finally`.
