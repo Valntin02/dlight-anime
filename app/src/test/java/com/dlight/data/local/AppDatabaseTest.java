@@ -27,6 +27,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @RunWith(RobolectricTestRunner.class)
 public class AppDatabaseTest {
@@ -140,12 +141,14 @@ public class AppDatabaseTest {
         try (FileOutputStream output = new FileOutputStream(legacyFile)) {
             output.write(new byte[]{1, 2, 3, 4});
         }
+        int snapshotsBefore = snapshotFileCount();
 
         try {
             inBackground(() -> AppDatabase.getInstancePlayRecord(context));
             fail("Expected malformed legacy database to fail import");
         } catch (ExecutionException expected) {
             assertFalse(importCompleted());
+            assertEquals(snapshotsBefore, snapshotFileCount());
         }
 
         AppDatabase.resetInstanceForTests();
@@ -211,6 +214,119 @@ public class AppDatabaseTest {
             assertArrayEquals(shmBefore, Files.readAllBytes(legacyShm.toPath()));
         }
         assertTrue(importCompleted());
+    }
+
+    @Test
+    public void changingLegacyFilesDiscardFirstSnapshotAndRetryWithAllRows() throws Exception {
+        createLegacyDatabase(playRecord(50, 500, "before snapshot"), null);
+        AppDatabase legacy = Room.databaseBuilder(
+            context, AppDatabase.class, AppDatabase.LEGACY_DB_NAME).build();
+        AppDatabase canonical = Room.databaseBuilder(
+            context, AppDatabase.class, AppDatabase.CANONICAL_DB_NAME).build();
+        AtomicInteger snapshotAttempts = new AtomicInteger();
+        try {
+            inBackground(() -> {
+                legacy.playRecordDao().getAllPlayRecords();
+                LegacyRecordImporter.importIfNeeded(context, canonical, (attempt, source) -> {
+                    snapshotAttempts.incrementAndGet();
+                    if (attempt == 1) {
+                        legacy.playRecordDao().insert(playRecord(51, 510, "during snapshot"));
+                        try (android.database.Cursor ignored = legacy.getOpenHelper()
+                                .getWritableDatabase()
+                                .query("PRAGMA wal_checkpoint(TRUNCATE)")) {
+                            ignored.moveToFirst();
+                        }
+                    }
+                });
+                return null;
+            });
+
+            assertEquals(2, snapshotAttempts.get());
+            assertNotNull(inBackground(
+                () -> canonical.playRecordDao().getPlayRecordByUserAndVideo(50, 500)));
+            assertNotNull(inBackground(
+                () -> canonical.playRecordDao().getPlayRecordByUserAndVideo(51, 510)));
+            assertTrue(importCompleted());
+        } finally {
+            inBackground(() -> {
+                canonical.close();
+                legacy.close();
+                return null;
+            });
+        }
+    }
+
+    @Test
+    public void openLegacyWalWithCommittedRowIsIncludedInSnapshot() throws Exception {
+        createLegacyDatabase(playRecord(60, 600, "main row"), null);
+        File legacyFile = context.getDatabasePath(AppDatabase.LEGACY_DB_NAME);
+        File legacyWal = new File(legacyFile.getPath() + "-wal");
+        AppDatabase legacy = Room.databaseBuilder(
+            context, AppDatabase.class, AppDatabase.LEGACY_DB_NAME).build();
+        try {
+            inBackground(() -> legacy.playRecordDao().getAllPlayRecords());
+            byte[] mainBeforeInsert = Files.readAllBytes(legacyFile.toPath());
+
+            inBackground(() -> {
+                legacy.playRecordDao().insert(playRecord(61, 610, "wal only row"));
+                return null;
+            });
+
+            assertArrayEquals(mainBeforeInsert, Files.readAllBytes(legacyFile.toPath()));
+            assertTrue(legacyWal.exists());
+            assertTrue(legacyWal.length() > 0);
+
+            AppDatabase canonical = inBackground(
+                () -> AppDatabase.getInstancePlayRecord(context));
+
+            assertNotNull(inBackground(
+                () -> canonical.playRecordDao().getPlayRecordByUserAndVideo(61, 610)));
+            assertTrue(importCompleted());
+        } finally {
+            inBackground(() -> {
+                legacy.close();
+                return null;
+            });
+        }
+    }
+
+    @Test
+    public void continuouslyChangingLegacyFilesFailAfterThreeAttemptsWithoutMarker()
+            throws Exception {
+        createLegacyDatabase(playRecord(70, 700, "changing row"), null);
+        AppDatabase legacy = Room.databaseBuilder(
+            context, AppDatabase.class, AppDatabase.LEGACY_DB_NAME).build();
+        AppDatabase canonical = Room.databaseBuilder(
+            context, AppDatabase.class, AppDatabase.CANONICAL_DB_NAME).build();
+        AtomicInteger snapshotAttempts = new AtomicInteger();
+        int snapshotsBefore = snapshotFileCount();
+        try {
+            try {
+                inBackground(() -> {
+                    legacy.playRecordDao().getAllPlayRecords();
+                    LegacyRecordImporter.importIfNeeded(context, canonical, (attempt, source) -> {
+                        snapshotAttempts.incrementAndGet();
+                        legacy.playRecordDao().updateEpisode(70, 700, attempt);
+                    });
+                    return null;
+                });
+                fail("Expected continuously changing legacy database to fail import");
+            } catch (ExecutionException expected) {
+                assertTrue(expected.getCause() instanceof IllegalStateException);
+            }
+
+            assertEquals(3, snapshotAttempts.get());
+            assertFalse(importCompleted());
+            assertEquals(0, (int) inBackground(
+                () -> canonical.playRecordDao().getAllPlayRecords().size()));
+            assertEquals(snapshotsBefore, snapshotFileCount());
+        } finally {
+            inBackground(() -> {
+                canonical.close();
+                legacy.close();
+                return null;
+            });
+        }
     }
 
     @Test
@@ -296,6 +412,12 @@ public class AppDatabaseTest {
         return context.getSharedPreferences(
                 LegacyRecordImporter.PREFERENCES_NAME, Context.MODE_PRIVATE)
             .getBoolean(LegacyRecordImporter.COMPLETED_KEY, false);
+    }
+
+    private int snapshotFileCount() {
+        File[] snapshots = context.getCacheDir().listFiles(
+            (directory, name) -> name.startsWith("legacy-record-import-"));
+        return snapshots == null ? 0 : snapshots.length;
     }
 
     private PlayRecord playRecord(int userId, int vodId, String name) {
