@@ -81,7 +81,7 @@ public final class HlsPlaylistParser {
                 }
                 continue;
             }
-            if (hasTagAttributes(upper, TAG_STREAM_INF)) {
+            if (isTag(upper, TAG_STREAM_INF)) {
                 hasMasterMarker = true;
                 pendingBandwidth = parseBandwidth(attributesAfterColon(line));
                 continue;
@@ -126,10 +126,6 @@ public final class HlsPlaylistParser {
 
     private static boolean isTag(String upperLine, String tag) {
         return upperLine.equals(tag) || upperLine.startsWith(tag + ":");
-    }
-
-    private static boolean hasTagAttributes(String upperLine, String tag) {
-        return upperLine.startsWith(tag + ":");
     }
 
     private static String attributesAfterColon(String line) {

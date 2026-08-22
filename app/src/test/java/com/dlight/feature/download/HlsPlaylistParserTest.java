@@ -155,13 +155,15 @@ public class HlsPlaylistParserTest {
                         + "#EXT-X-BYTERANGE-FOO:100\n"
                         + "#EXT-X-KEYFORMAT:METHOD=AES-128\n"
                         + "#EXT-X-STREAM-INFORMATION:BANDWIDTH=10\n"
-                        + "#EXT-X-STREAM-INF\n"
                         + "segment.ts\n",
                 URI.create("https://cdn.example.com/master.m3u8"));
 
         assertEquals(Collections.singletonList("https://cdn.example.com/segment.ts"),
                 result.getSegments());
         assertTrue(result.getVariants().isEmpty());
+
+        assertParseFails("#EXTM3U\n#EXT-X-STREAM-INF\nvariant.m3u8\n",
+                "播放列表 BANDWIDTH 无效");
     }
 
     @Test
