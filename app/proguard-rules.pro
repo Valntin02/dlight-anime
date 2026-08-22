@@ -32,6 +32,9 @@
 -keepattributes *Annotation*
 -keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations
 -keep @interface com.dlight.network.LocalOnly
+-keepclassmembers,allowobfuscation class * {
+    @com.dlight.network.LocalOnly <fields>;
+}
 -keepattributes Signature
 -keepattributes SourceFile,LineNumberTable
 -keepattributes Exceptions,InnerClasses,Deprecated,LocalVariable*Table,Synthetic,EnclosingMethod
