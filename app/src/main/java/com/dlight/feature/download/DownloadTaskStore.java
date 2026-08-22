@@ -58,6 +58,23 @@ public final class DownloadTaskStore {
         write(appContext, tasks);
     }
 
+    public static synchronized void reconcileInterruptedTasks(Context context) {
+        Context appContext = context.getApplicationContext();
+        List<DownloadTask> tasks = read(appContext);
+        boolean changed = false;
+        for (DownloadTask task : tasks) {
+            if (!task.isActive()) {
+                continue;
+            }
+            task.setStatus(DownloadContract.STATUS_PAUSED);
+            task.setErrorMessage("");
+            changed = true;
+        }
+        if (changed) {
+            write(appContext, tasks);
+        }
+    }
+
     private static List<DownloadTask> read(Context context) {
         SharedPreferences preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         String raw = preferences.getString(KEY_TASKS, "[]");

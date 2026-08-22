@@ -10,6 +10,7 @@ import androidx.media3.datasource.TransferListener;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.multidex.MultiDexApplication;
 
+import com.dlight.feature.download.DownloadTaskStore;
 import com.dlight.network.exosource.DlightExoHttpDataSourceFactory;
 
 import java.io.File;
@@ -33,6 +34,12 @@ public class DlightApplication extends MultiDexApplication {
         super.onCreate();
 
         context = getApplicationContext();
+
+        try {
+            DownloadTaskStore.reconcileInterruptedTasks(context);
+        } catch (RuntimeException e) {
+            Log.e(TAG, "Failed to reconcile interrupted downloads", e);
+        }
 
         Log.d(TAG, "DlightApplication started");
 

@@ -19,7 +19,7 @@ public class DownloadTask {
     public DownloadTask(String taskId, int videoId, int episode, String title, String url,
                         String coverUrl, int progress, String status, String filePath,
                         String errorMessage, long updatedAt) {
-        this.taskId = taskId;
+        this.taskId = safe(taskId);
         this.videoId = videoId;
         this.episode = episode;
         this.title = safe(title);
@@ -56,22 +56,26 @@ public class DownloadTask {
 
     public static DownloadTask fromJson(JSONObject json) {
         return new DownloadTask(
-            json.optString("taskId"),
+            stringValue(json, "taskId"),
             json.optInt("videoId", -1),
             json.optInt("episode", 1),
-            json.optString("title"),
-            json.optString("url"),
-            json.optString("coverUrl"),
+            stringValue(json, "title"),
+            stringValue(json, "url"),
+            stringValue(json, "coverUrl"),
             json.optInt("progress", 0),
-            json.optString("status", DownloadContract.STATUS_FAILED),
-            json.optString("filePath"),
-            json.optString("errorMessage"),
+            json.has("status") ? stringValue(json, "status") : DownloadContract.STATUS_FAILED,
+            stringValue(json, "filePath"),
+            stringValue(json, "errorMessage"),
             json.optLong("updatedAt", 0L)
         );
     }
 
     private static String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String stringValue(JSONObject json, String key) {
+        return json.isNull(key) ? "" : json.optString(key);
     }
 
     public String getTaskId() {
@@ -152,6 +156,9 @@ public class DownloadTask {
     }
 
     private void touch() {
-        updatedAt = System.currentTimeMillis();
+        if (updatedAt == Long.MAX_VALUE) {
+            return;
+        }
+        updatedAt = Math.max(System.currentTimeMillis(), updatedAt + 1L);
     }
 }
