@@ -16,7 +16,6 @@ import java.util.regex.Pattern;
 public final class PlaySourceSelector {
     private static final int MAX_EPISODE_COUNT = 2000;
     private static final Pattern EPISODE_COUNT_PATTERN = Pattern.compile("(\\d+)(?:集|话|期)");
-    private static final Pattern PURE_NUMBER_PATTERN = Pattern.compile("\\d+");
 
     private PlaySourceSelector() {
     }
@@ -78,11 +77,14 @@ public final class PlaySourceSelector {
     }
 
     static int parseEpisodeCount(String remarks, String total) {
-        int fromRemarks = extractEpisodeCount(remarks);
+        int fromRemarks = extractLabeledEpisodeCount(remarks);
         if (fromRemarks > 0) {
             return fromRemarks;
         }
-        int fromTotal = extractEpisodeCount(total);
+        int fromTotal = extractLabeledEpisodeCount(total);
+        if (fromTotal <= 0) {
+            fromTotal = extractPureEpisodeCount(total);
+        }
         return fromTotal > 0 ? fromTotal : 1;
     }
 
@@ -154,25 +156,27 @@ public final class PlaySourceSelector {
         return label != null && label.isJsonPrimitive() ? label.getAsString() : "";
     }
 
-    private static int extractEpisodeCount(String text) {
+    private static int extractLabeledEpisodeCount(String text) {
         if (text == null) {
             return 0;
         }
         String trimmed = text.trim();
-        if (trimmed.isEmpty()) {
-            return 0;
-        }
-
         Matcher matcher = EPISODE_COUNT_PATTERN.matcher(trimmed);
-        String number;
-        if (matcher.find()) {
-            number = matcher.group(1);
-        } else if (PURE_NUMBER_PATTERN.matcher(trimmed).matches()) {
-            number = trimmed;
-        } else {
+        if (!matcher.find()) {
             return 0;
         }
+        return parseBoundedPositiveInt(matcher.group(1));
+    }
 
+    private static int extractPureEpisodeCount(String text) {
+        if (text == null) {
+            return 0;
+        }
+        String trimmed = text.trim();
+        return trimmed.matches("\\d+") ? parseBoundedPositiveInt(trimmed) : 0;
+    }
+
+    private static int parseBoundedPositiveInt(String number) {
         try {
             int count = Integer.parseInt(number);
             return count > 0 ? Math.min(count, MAX_EPISODE_COUNT) : 0;

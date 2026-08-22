@@ -220,6 +220,8 @@ public class PlaySourceSelectorTest {
     @Test
     public void parseEpisodeCount_acceptsPureNumericTotal() {
         assertEquals(24, PlaySourceSelector.parseEpisodeCount("完结", " 24 "));
+        assertEquals(24, PlaySourceSelector.parseEpisodeCount("20260823", "24"));
+        assertEquals(24, PlaySourceSelector.parseEpisodeCount("12", "24"));
         assertEquals(1, PlaySourceSelector.parseEpisodeCount(null, "0"));
     }
 
