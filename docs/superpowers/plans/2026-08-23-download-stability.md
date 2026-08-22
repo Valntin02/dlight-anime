@@ -161,7 +161,7 @@ static List<String> resolve(String playlistUrl, PlaylistFetcher fetcher, int dep
 
 Reject depth greater than three. Fetch UTF-8 text with 15-second connect/read timeouts and a 2 MiB streaming limit. Handle at most five redirects manually, validate every hop, accept only HTTP 200, and parse relative URIs against the final response URI. Return media segments, or recurse into `variants.get(0)`. Return an unmodifiable segment list.
 
-`DownloadUrlPolicy` allows private addresses in Debug for emulator development. In Release it resolves every host and rejects any-local, loopback, link-local, site-local/private, and multicast addresses. Apply the policy to the initial playlist, every redirect, every nested playlist, and every segment before transfer.
+`DownloadUrlPolicy` allows private addresses in Debug for emulator development. In Release it resolves every host and rejects any-local, loopback, link-local, site-local/private, IPv6 ULA (`fc00::/7`), IPv4 CGNAT (`100.64.0.0/10`), and multicast addresses. Apply the policy to the initial playlist, every redirect, every nested playlist, and every segment before transfer.
 
 - [ ] **Step 4: Replace VideoDownloader's private playlist traversal**
 
