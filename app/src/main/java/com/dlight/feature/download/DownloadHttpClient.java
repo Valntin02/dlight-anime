@@ -10,6 +10,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
+import okhttp3.Call;
 import okhttp3.ConnectionPool;
 import okhttp3.Dns;
 import okhttp3.OkHttpClient;
@@ -45,9 +46,13 @@ final class DownloadHttpClient {
     }
 
     static Response execute(URI uri, boolean allowPrivate, Purpose purpose) throws IOException {
+        return newCall(uri, allowPrivate, purpose).execute();
+    }
+
+    static Call newCall(URI uri, boolean allowPrivate, Purpose purpose) throws IOException {
         OkHttpClient client = clientFor(uri, allowPrivate, purpose, POLICY_RESOLVER);
         Request request = new Request.Builder().url(uri.toString()).build();
-        return client.newCall(request).execute();
+        return client.newCall(request);
     }
 
     static OkHttpClient clientFor(URI uri, boolean allowPrivate, Purpose purpose,

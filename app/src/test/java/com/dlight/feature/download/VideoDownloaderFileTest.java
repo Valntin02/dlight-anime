@@ -25,6 +25,9 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -245,17 +248,83 @@ public class VideoDownloaderFileTest {
         File tempDirectory = temporaryFolder.newFolder("segments");
         File completed = new File(tempDirectory, "0.ts");
         write(completed, "verified");
+        File completedPart = new File(tempDirectory, "0.ts.part");
         File firstMissingPart = new File(tempDirectory, "1.ts.part");
         File secondMissingPart = new File(tempDirectory, "2.ts.part");
+        File obsoleteSegment = new File(tempDirectory, "3.ts");
+        File obsoletePart = new File(tempDirectory, "4.ts.part");
+        write(completedPart, "stale-completed");
         write(firstMissingPart, "stale-one");
         write(secondMissingPart, "stale-two");
+        write(obsoleteSegment, "obsolete");
+        write(obsoletePart, "obsolete-part");
 
         List<Integer> missing = VideoDownloader.prepareMissingSegments(tempDirectory, 3);
 
         assertEquals(Arrays.asList(1, 2), missing);
+        assertFalse(completedPart.exists());
         assertFalse(firstMissingPart.exists());
         assertFalse(secondMissingPart.exists());
+        assertFalse(obsoleteSegment.exists());
+        assertFalse(obsoletePart.exists());
         assertArrayEquals(bytes("verified"), Files.readAllBytes(completed.toPath()));
+    }
+
+    @Test
+    public void matchingPlaylistFingerprintPreservesCompletedSegments() throws Exception {
+        File tempDirectory = new File(temporaryFolder.getRoot(), "segments");
+        List<String> urls = Arrays.asList(
+                "https://cdn.example.com/0.ts", "https://cdn.example.com/1.ts");
+        VideoDownloader.preparePlaylistState(tempDirectory, urls);
+        File completed = new File(tempDirectory, "0.ts");
+        write(completed, "verified");
+
+        VideoDownloader.preparePlaylistState(tempDirectory, urls);
+
+        assertArrayEquals(bytes("verified"), Files.readAllBytes(completed.toPath()));
+    }
+
+    @Test
+    public void changedPlaylistFingerprintClearsCompletedSegments() throws Exception {
+        File tempDirectory = new File(temporaryFolder.getRoot(), "segments");
+        VideoDownloader.preparePlaylistState(tempDirectory,
+                Arrays.asList("https://cdn.example.com/old.ts"));
+        File completed = new File(tempDirectory, "0.ts");
+        write(completed, "verified");
+
+        VideoDownloader.preparePlaylistState(tempDirectory,
+                Arrays.asList("https://cdn.example.com/new.ts"));
+
+        assertFalse(completed.exists());
+        assertTrue(new File(tempDirectory, ".playlist.sha256").isFile());
+    }
+
+    @Test
+    public void legacyDirectoryWithoutFingerprintIsCleared() throws Exception {
+        File tempDirectory = temporaryFolder.newFolder("segments");
+        File completed = new File(tempDirectory, "0.ts");
+        write(completed, "legacy");
+
+        VideoDownloader.preparePlaylistState(tempDirectory,
+                Arrays.asList("https://cdn.example.com/0.ts"));
+
+        assertFalse(completed.exists());
+        assertTrue(new File(tempDirectory, ".playlist.sha256").isFile());
+    }
+
+    @Test
+    public void playlistFingerprintIsPublishedAtomically() throws Exception {
+        File tempDirectory = new File(temporaryFolder.getRoot(), "segments");
+
+        VideoDownloader.preparePlaylistState(tempDirectory, Arrays.asList(
+                "https://cdn.example.com/a.ts", "https://cdn.example.com/b.ts"));
+
+        File fingerprint = new File(tempDirectory, ".playlist.sha256");
+        String value = new String(Files.readAllBytes(fingerprint.toPath()),
+                StandardCharsets.UTF_8);
+        assertEquals(64, value.length());
+        assertTrue(value.matches("[0-9a-f]{64}"));
+        assertFalse(new File(tempDirectory, ".playlist.sha256.part").exists());
     }
 
     @Test
@@ -280,6 +349,9 @@ public class VideoDownloaderFileTest {
             String fileName = "episode";
             File taskDirectory = taskDirectory(destination, playlistUrl, fileName);
             assertTrue(taskDirectory.mkdir());
+            VideoDownloader.preparePlaylistState(taskDirectory, Arrays.asList(
+                    serverBase(server) + "/existing.ts",
+                    serverBase(server) + "/missing.ts"));
             File completed = new File(taskDirectory, "0.ts");
             write(completed, "verified");
             RecordingCallback callback = new RecordingCallback();
@@ -302,6 +374,7 @@ public class VideoDownloaderFileTest {
         JdkHttpServer server = newServer();
         CountDownLatch requestStarted = new CountDownLatch(1);
         CountDownLatch releaseResponse = new CountDownLatch(1);
+        CountDownLatch responseFinished = new CountDownLatch(1);
         server.createContext("/playlist.m3u8", exchange -> respond(exchange, 200,
                 "#EXTM3U\n#EXTINF:1,\nexisting.ts\n#EXTINF:1,\nslow.ts\n"));
         server.createContext("/slow.ts", exchange -> {
@@ -312,6 +385,8 @@ public class VideoDownloaderFileTest {
             } catch (InterruptedException error) {
                 Thread.currentThread().interrupt();
                 exchange.close();
+            } finally {
+                responseFinished.countDown();
             }
         });
         server.start();
@@ -321,6 +396,9 @@ public class VideoDownloaderFileTest {
             String fileName = "episode";
             File taskDirectory = taskDirectory(destination, playlistUrl, fileName);
             assertTrue(taskDirectory.mkdir());
+            VideoDownloader.preparePlaylistState(taskDirectory, Arrays.asList(
+                    serverBase(server) + "/existing.ts",
+                    serverBase(server) + "/slow.ts"));
             File completed = new File(taskDirectory, "0.ts");
             write(completed, "verified");
             RecordingCallback callback = new RecordingCallback();
@@ -331,14 +409,88 @@ public class VideoDownloaderFileTest {
             assertTrue(requestStarted.await(5, TimeUnit.SECONDS));
             downloadThread.interrupt();
             downloadThread.join(5000);
+            int progressAtTerminal = callback.progress.get();
+            assertEquals(1, callback.terminals.get());
             releaseResponse.countDown();
+            assertTrue(responseFinished.await(5, TimeUnit.SECONDS));
+            Thread.sleep(200);
 
             assertFalse(downloadThread.isAlive());
             assertTrue(callback.failure.get() instanceof InterruptedException);
+            assertEquals(progressAtTerminal, callback.progress.get());
+            assertEquals(1, callback.terminals.get());
             assertTrue(taskDirectory.exists());
             assertArrayEquals(bytes("verified"), Files.readAllBytes(completed.toPath()));
+            assertFalse(new File(taskDirectory, "1.ts").exists());
+            assertFalse(new File(taskDirectory, "1.ts.part").exists());
+            assertFalse(new File(destination, fileName + ".ts").exists());
         } finally {
             releaseResponse.countDown();
+            server.stop(0);
+        }
+    }
+
+    @Test
+    public void workerFailureCancelsBlockedPeerBeforeTerminalCallback() throws Exception {
+        JdkHttpServer server = newServer();
+        CountDownLatch slowStarted = new CountDownLatch(1);
+        CountDownLatch releaseSlow = new CountDownLatch(1);
+        CountDownLatch slowFinished = new CountDownLatch(1);
+        server.createContext("/playlist.m3u8", exchange -> respond(exchange, 200,
+                "#EXTM3U\n#EXTINF:1,\nslow.ts\n#EXTINF:1,\nfail.ts\n"));
+        server.createContext("/slow.ts", exchange -> {
+            slowStarted.countDown();
+            try {
+                releaseSlow.await(15, TimeUnit.SECONDS);
+                respond(exchange, 200, "late-data");
+            } catch (InterruptedException error) {
+                Thread.currentThread().interrupt();
+                exchange.close();
+            } finally {
+                slowFinished.countDown();
+            }
+        });
+        server.createContext("/fail.ts", exchange -> {
+            slowStarted.await(5, TimeUnit.SECONDS);
+            respond(exchange, 500, "failure");
+        });
+        server.start();
+        Thread downloadThread = null;
+        try {
+            File destination = temporaryFolder.newFolder("downloads");
+            String playlistUrl = serverBase(server) + "/playlist.m3u8";
+            String fileName = "episode";
+            File taskDirectory = taskDirectory(destination, playlistUrl, fileName);
+            RecordingCallback callback = new RecordingCallback();
+            downloadThread = new Thread(() -> VideoDownloader.mulDownloadM3u8(
+                    playlistUrl, destination, fileName, null, callback));
+
+            downloadThread.start();
+            assertTrue("slow request did not start; failure=" + callback.failure.get(),
+                    slowStarted.await(5, TimeUnit.SECONDS));
+            downloadThread.join(5000);
+            boolean finishedBeforeServerRelease = !downloadThread.isAlive();
+            int progressAtTerminal = callback.progress.get();
+            int terminalsAtReturn = callback.terminals.get();
+            releaseSlow.countDown();
+            assertTrue(slowFinished.await(5, TimeUnit.SECONDS));
+            downloadThread.join(5000);
+            Thread.sleep(200);
+
+            assertTrue("terminal callback waited for cancellation",
+                    finishedBeforeServerRelease);
+            assertEquals(1, terminalsAtReturn);
+            assertEquals(1, callback.terminals.get());
+            assertTrue(callback.failure.get() instanceof IOException);
+            assertEquals(progressAtTerminal, callback.progress.get());
+            assertFalse(new File(taskDirectory, "0.ts").exists());
+            assertFalse(new File(taskDirectory, "0.ts.part").exists());
+            assertFalse(new File(destination, fileName + ".ts").exists());
+        } finally {
+            releaseSlow.countDown();
+            if (downloadThread != null) {
+                downloadThread.join(5000);
+            }
             server.stop(0);
         }
     }
@@ -374,6 +526,8 @@ public class VideoDownloaderFileTest {
             String fileName = "episode";
             File taskDirectory = taskDirectory(destination, playlistUrl, fileName);
             assertTrue(taskDirectory.mkdir());
+            VideoDownloader.preparePlaylistState(taskDirectory,
+                    Arrays.asList(serverBase(server) + "/existing.ts"));
             write(new File(taskDirectory, "0.ts"), "verified");
             RecordingCallback callback = new RecordingCallback();
 
@@ -441,19 +595,28 @@ public class VideoDownloaderFileTest {
         private final Object server;
         private final Class<?> serverClass;
         private final Class<?> handlerClass;
+        private final ExecutorService executor;
 
-        private JdkHttpServer(Object server, Class<?> serverClass, Class<?> handlerClass) {
+        private JdkHttpServer(Object server, Class<?> serverClass, Class<?> handlerClass,
+                ExecutorService executor) {
             this.server = server;
             this.serverClass = serverClass;
             this.handlerClass = handlerClass;
+            this.executor = executor;
         }
 
         static JdkHttpServer create(InetSocketAddress address) throws Exception {
             Class<?> serverClass = Class.forName("com.sun.net.httpserver.HttpServer");
             Object server = serverClass.getMethod("create", InetSocketAddress.class, int.class)
                     .invoke(null, address, 0);
+            ExecutorService executor = Executors.newCachedThreadPool(runnable -> {
+                Thread thread = new Thread(runnable);
+                thread.setDaemon(true);
+                return thread;
+            });
+            serverClass.getMethod("setExecutor", Executor.class).invoke(server, executor);
             return new JdkHttpServer(server, serverClass,
-                    Class.forName("com.sun.net.httpserver.HttpHandler"));
+                    Class.forName("com.sun.net.httpserver.HttpHandler"), executor);
         }
 
         void createContext(String path, final TestHandler handler) throws Exception {
@@ -481,6 +644,8 @@ public class VideoDownloaderFileTest {
                 serverClass.getMethod("stop", int.class).invoke(server, delay);
             } catch (ReflectiveOperationException error) {
                 throw new AssertionError(error);
+            } finally {
+                executor.shutdownNow();
             }
         }
 
@@ -528,24 +693,30 @@ public class VideoDownloaderFileTest {
         private final AtomicReference<Exception> failure = new AtomicReference<>();
         private final AtomicReference<File> success = new AtomicReference<>();
         private final AtomicInteger paused = new AtomicInteger();
+        private final AtomicInteger progress = new AtomicInteger();
+        private final AtomicInteger terminals = new AtomicInteger();
 
         @Override
         public void onProgress(int progress) {
+            this.progress.incrementAndGet();
         }
 
         @Override
         public void onSuccess(File file) {
             success.set(file);
+            terminals.incrementAndGet();
         }
 
         @Override
         public void onFailure(Exception error) {
             failure.set(error);
+            terminals.incrementAndGet();
         }
 
         @Override
         public void onPaused() {
             paused.incrementAndGet();
+            terminals.incrementAndGet();
         }
     }
 

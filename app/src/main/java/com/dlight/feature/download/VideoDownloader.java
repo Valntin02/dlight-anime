@@ -1,6 +1,7 @@
 package com.dlight.feature.download;
 
 import android.content.Context;
+import android.util.Log;
 
 import com.dlight.BuildConfig;
 
@@ -16,20 +17,29 @@ import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import okhttp3.Call;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 public class VideoDownloader {
+    private static final String TAG = "VideoDownloader";
     public interface DownloadCallback {
         void onProgress(int progress);
         void onSuccess(File file);
@@ -144,7 +154,10 @@ public class VideoDownloader {
     public static void mulDownloadM3u8(String m3u8Url, File destination, String fileName,
                                        PauseSignal pauseSignal, DownloadCallback callback) {
         ExecutorService executorService = null;
+        TransferController transferController = null;
+        CountDownLatch workerLatch = null;
         File videoTempDir = null;
+        boolean terminalCallbackStarted = false;
         try {
             if (m3u8Url == null || m3u8Url.trim().isEmpty()) {
                 throw new IOException("下载地址为空");
@@ -165,6 +178,7 @@ public class VideoDownloader {
             if (!videoTempDir.exists() && !videoTempDir.mkdirs()) {
                 throw new IOException("无法创建临时目录");
             }
+            preparePlaylistState(videoTempDir, tsUrls);
 
             final File taskTempDir = videoTempDir;
             int totalTsFiles = tsUrls.size();
@@ -172,35 +186,44 @@ public class VideoDownloader {
                     taskTempDir, totalTsFiles);
             int existingSegments = totalTsFiles - missingSegments.size();
             CountDownLatch latch = new CountDownLatch(missingSegments.size());
+            workerLatch = latch;
+            CountDownLatch startGate = new CountDownLatch(1);
             AtomicInteger completedFiles = new AtomicInteger(existingSegments);
             AtomicReference<Exception> failure = new AtomicReference<>();
             executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-
-            if (existingSegments > 0) {
-                callback.onProgress((int) ((existingSegments * 100.0) / totalTsFiles));
-            }
+            transferController = new TransferController(executorService, latch);
+            final TransferController taskController = transferController;
 
             for (int missingIndex : missingSegments) {
                 final int index = missingIndex;
                 final String tsUrl = tsUrls.get(index);
-                executorService.submit(() -> {
+                executorService.execute(() -> {
                     try {
+                        startGate.await();
                         if (failure.get() != null) {
                             return;
                         }
                         throwIfPaused(pauseSignal);
-                        downloadSegment(tsUrl, new File(taskTempDir, index + ".ts"), pauseSignal);
+                        downloadSegment(tsUrl, new File(taskTempDir, index + ".ts"),
+                                pauseSignal, BuildConfig.DEBUG, taskController);
                         int completed = completedFiles.incrementAndGet();
                         callback.onProgress((int) ((completed * 100.0) / totalTsFiles));
                     } catch (Exception e) {
-                        failure.compareAndSet(null, e);
+                        if (failure.compareAndSet(null, e)) {
+                            taskController.cancelAll();
+                        }
                     } finally {
                         latch.countDown();
                     }
                 });
             }
+            if (existingSegments > 0) {
+                callback.onProgress((int) ((existingSegments * 100.0) / totalTsFiles));
+            }
+            startGate.countDown();
 
             latch.await();
+            transferController.shutdownAndAwait();
             if (failure.get() != null) {
                 throw failure.get();
             }
@@ -209,16 +232,26 @@ public class VideoDownloader {
             File mergedFile = new File(destination, safeName + ".ts");
             mergeSegments(videoTempDir, totalTsFiles, mergedFile);
             deleteDirectory(videoTempDir);
+            terminalCallbackStarted = true;
             callback.onSuccess(mergedFile);
         } catch (DownloadPausedException e) {
-            callback.onPaused();
+            cancelAndAwait(transferController, workerLatch);
+            if (!terminalCallbackStarted) {
+                callback.onPaused();
+            }
         } catch (InterruptedException e) {
+            cancelAndAwait(transferController, workerLatch);
             Thread.currentThread().interrupt();
-            callback.onFailure(e);
+            if (!terminalCallbackStarted) {
+                callback.onFailure(e);
+            }
         } catch (Exception e) {
-            callback.onFailure(e);
+            cancelAndAwait(transferController, workerLatch);
+            if (!terminalCallbackStarted) {
+                callback.onFailure(e);
+            }
         } finally {
-            if (executorService != null) {
+            if (executorService != null && !executorService.isTerminated()) {
                 executorService.shutdownNow();
             }
         }
@@ -231,13 +264,20 @@ public class VideoDownloader {
 
     static void downloadSegment(String url, File destination, PauseSignal pauseSignal,
             boolean allowPrivate) throws IOException {
+        downloadSegment(url, destination, pauseSignal, allowPrivate, null);
+    }
+
+    private static void downloadSegment(String url, File destination, PauseSignal pauseSignal,
+            boolean allowPrivate, TransferController controller) throws IOException {
         IOException lastError = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
             File partFile = segmentPartFile(destination);
             try {
                 deleteIfExists(partFile);
                 throwIfPaused(pauseSignal);
-                try (Response response = openSegmentResponse(url, allowPrivate)) {
+                try (TrackedResponse tracked = openSegmentResponse(
+                        url, allowPrivate, controller)) {
+                    Response response = tracked.response;
                     ResponseBody body = response.body();
                     if (body == null) {
                         throw new IOException("视频分片响应内容为空");
@@ -283,7 +323,7 @@ public class VideoDownloader {
             published = true;
         } finally {
             if (!published) {
-                partFile.delete();
+                deleteQuietly(partFile);
             }
         }
     }
@@ -315,8 +355,8 @@ public class VideoDownloader {
             return destination;
         } finally {
             if (!published) {
-                partFile.delete();
-                destination.delete();
+                deleteQuietly(partFile);
+                deleteQuietly(destination);
             }
         }
     }
@@ -334,19 +374,125 @@ public class VideoDownloader {
 
     static List<Integer> prepareMissingSegments(File tempDirectory, int totalSegments)
             throws IOException {
-        List<Integer> missingSegments = findMissingSegments(tempDirectory, totalSegments);
-        for (int index : missingSegments) {
-            File destination = new File(tempDirectory, index + ".ts");
-            deleteIfExists(segmentPartFile(destination));
+        File[] files = tempDirectory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                String name = file.getName();
+                if (name.endsWith(".ts.part")) {
+                    Integer index = parseSegmentIndex(
+                            name.substring(0, name.length() - ".ts.part".length()));
+                    if (index != null) {
+                        deleteIfExists(file);
+                    }
+                } else if (name.endsWith(".ts")) {
+                    Integer index = parseSegmentIndex(
+                            name.substring(0, name.length() - ".ts".length()));
+                    if (index != null && (index >= totalSegments || file.length() <= 0)) {
+                        deleteIfExists(file);
+                    }
+                }
+            }
         }
+        List<Integer> missingSegments = findMissingSegments(tempDirectory, totalSegments);
         return missingSegments;
+    }
+
+    static void preparePlaylistState(File tempDirectory, List<String> segmentUrls)
+            throws IOException {
+        String expected = playlistFingerprint(segmentUrls);
+        File fingerprintFile = new File(tempDirectory, ".playlist.sha256");
+        boolean matches = fingerprintFile.isFile()
+                && expected.equals(readUtf8(fingerprintFile));
+        if (!matches) {
+            boolean cleared = deleteDirectory(tempDirectory);
+            if (!cleared || tempDirectory.exists() || !tempDirectory.mkdirs()) {
+                throw new IOException("无法重置临时下载目录");
+            }
+            writeUtf8Atomically(fingerprintFile, expected);
+        }
+    }
+
+    private static String playlistFingerprint(List<String> segmentUrls) throws IOException {
+        final MessageDigest digest;
+        try {
+            digest = MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException error) {
+            throw new IOException("设备不支持 SHA-256", error);
+        }
+        for (String url : segmentUrls) {
+            byte[] bytes = url.getBytes(StandardCharsets.UTF_8);
+            digest.update((byte) (bytes.length >>> 24));
+            digest.update((byte) (bytes.length >>> 16));
+            digest.update((byte) (bytes.length >>> 8));
+            digest.update((byte) bytes.length);
+            digest.update(bytes);
+        }
+        StringBuilder value = new StringBuilder(64);
+        for (byte item : digest.digest()) {
+            value.append(String.format("%02x", item & 0xff));
+        }
+        return value.toString();
+    }
+
+    private static String readUtf8(File file) throws IOException {
+        if (file.length() > 128) {
+            return "";
+        }
+        byte[] bytes = new byte[(int) file.length()];
+        try (FileInputStream input = new FileInputStream(file)) {
+            int offset = 0;
+            while (offset < bytes.length) {
+                int count = input.read(bytes, offset, bytes.length - offset);
+                if (count == -1) {
+                    break;
+                }
+                offset += count;
+            }
+            if (offset != bytes.length) {
+                return "";
+            }
+        }
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    private static void writeUtf8Atomically(File destination, String value) throws IOException {
+        File partFile = new File(destination.getPath() + ".part");
+        deleteIfExists(partFile);
+        boolean published = false;
+        try {
+            try (FileOutputStream output = new FileOutputStream(partFile, false)) {
+                output.write(value.getBytes(StandardCharsets.UTF_8));
+            }
+            replaceWithPartFile(partFile, destination, "无法保存播放列表指纹");
+            published = true;
+        } finally {
+            if (!published) {
+                deleteQuietly(partFile);
+            }
+        }
+    }
+
+    private static Integer parseSegmentIndex(String value) {
+        if (value.isEmpty()) {
+            return null;
+        }
+        for (int i = 0; i < value.length(); i++) {
+            if (!Character.isDigit(value.charAt(i))) {
+                return null;
+            }
+        }
+        try {
+            return Integer.valueOf(value);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
     }
 
     private static void replaceWithPartFile(File partFile, File destination, String errorMessage)
             throws IOException {
         deleteIfExists(destination);
         if (!partFile.renameTo(destination)) {
-            partFile.delete();
+            deleteQuietly(partFile);
             throw new IOException(errorMessage);
         }
     }
@@ -361,7 +507,8 @@ public class VideoDownloader {
         }
     }
 
-    private static Response openSegmentResponse(String url, boolean allowPrivate)
+    private static TrackedResponse openSegmentResponse(String url, boolean allowPrivate,
+            TransferController controller)
             throws IOException {
         URI currentUri = parseDownloadUri(url);
         Set<URI> visited = new HashSet<>();
@@ -369,8 +516,22 @@ public class VideoDownloader {
         int redirectCount = 0;
 
         while (true) {
-            Response response = DownloadHttpClient.execute(currentUri, allowPrivate,
+            Call call = DownloadHttpClient.newCall(currentUri, allowPrivate,
                     DownloadHttpClient.Purpose.SEGMENT);
+            if (controller != null && !controller.register(call)) {
+                call.cancel();
+                throw new IOException("视频分片下载已取消");
+            }
+            final Response response;
+            try {
+                response = call.execute();
+            } catch (IOException error) {
+                if (controller != null) {
+                    controller.unregister(call);
+                }
+                throw error;
+            }
+            TrackedResponse tracked = new TrackedResponse(response, call, controller);
             boolean keepResponse = false;
             try {
                 int status = response.code();
@@ -379,7 +540,7 @@ public class VideoDownloader {
                         throw new IOException("视频分片请求失败，HTTP 状态码: " + status);
                     }
                     keepResponse = true;
-                    return response;
+                    return tracked;
                 }
 
                 if (redirectCount >= MAX_SEGMENT_REDIRECTS) {
@@ -403,9 +564,115 @@ public class VideoDownloader {
                 redirectCount++;
             } finally {
                 if (!keepResponse) {
-                    response.close();
+                    tracked.close();
                 }
             }
+        }
+    }
+
+    private static void cancelAndAwait(TransferController controller, CountDownLatch latch) {
+        if (controller == null) {
+            return;
+        }
+        controller.cancelAll();
+        boolean interrupted = false;
+        if (latch != null) {
+            while (true) {
+                try {
+                    latch.await();
+                    break;
+                } catch (InterruptedException error) {
+                    interrupted = true;
+                    controller.cancelAll();
+                }
+            }
+        }
+        interrupted |= controller.awaitTerminationUninterruptibly();
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static final class TrackedResponse implements AutoCloseable {
+        private final Response response;
+        private final Call call;
+        private final TransferController controller;
+
+        private TrackedResponse(Response response, Call call, TransferController controller) {
+            this.response = response;
+            this.call = call;
+            this.controller = controller;
+        }
+
+        @Override
+        public void close() {
+            try {
+                response.close();
+            } finally {
+                if (controller != null) {
+                    controller.unregister(call);
+                }
+            }
+        }
+    }
+
+    private static final class TransferController {
+        private final Set<Call> activeCalls = Collections.newSetFromMap(
+                new ConcurrentHashMap<Call, Boolean>());
+        private final AtomicBoolean cancelled = new AtomicBoolean();
+        private final ExecutorService executor;
+        private final CountDownLatch latch;
+
+        private TransferController(ExecutorService executor, CountDownLatch latch) {
+            this.executor = executor;
+            this.latch = latch;
+        }
+
+        private boolean register(Call call) {
+            if (cancelled.get()) {
+                return false;
+            }
+            activeCalls.add(call);
+            if (cancelled.get() && activeCalls.remove(call)) {
+                call.cancel();
+                return false;
+            }
+            return true;
+        }
+
+        private void unregister(Call call) {
+            activeCalls.remove(call);
+        }
+
+        private void cancelAll() {
+            cancelled.set(true);
+            for (Call call : activeCalls) {
+                call.cancel();
+            }
+            List<Runnable> neverStarted = executor.shutdownNow();
+            for (int i = 0; i < neverStarted.size(); i++) {
+                latch.countDown();
+            }
+        }
+
+        private void shutdownAndAwait() throws InterruptedException {
+            executor.shutdown();
+            while (!executor.awaitTermination(1, TimeUnit.DAYS)) {
+                // Keep waiting until no worker can publish progress or files.
+            }
+        }
+
+        private boolean awaitTerminationUninterruptibly() {
+            boolean interrupted = false;
+            while (!executor.isTerminated()) {
+                try {
+                    executor.awaitTermination(1, TimeUnit.DAYS);
+                } catch (InterruptedException error) {
+                    interrupted = true;
+                    cancelAll();
+                }
+            }
+            return interrupted;
         }
     }
 
@@ -450,18 +717,30 @@ public class VideoDownloader {
         }
     }
 
-    private static void deleteDirectory(File directory) {
+    private static boolean deleteDirectory(File directory) {
+        if (!directory.exists()) {
+            return true;
+        }
+        boolean deleted = true;
         File[] files = directory.listFiles();
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
-                    deleteDirectory(file);
+                    deleted &= deleteDirectory(file);
                 } else {
-                    file.delete();
+                    deleted &= deleteQuietly(file);
                 }
             }
         }
-        directory.delete();
+        return deleteQuietly(directory) && deleted;
+    }
+
+    private static boolean deleteQuietly(File file) {
+        if (!file.exists() || file.delete()) {
+            return true;
+        }
+        Log.w(TAG, "无法删除下载缓存: " + file.getAbsolutePath());
+        return false;
     }
 
 
