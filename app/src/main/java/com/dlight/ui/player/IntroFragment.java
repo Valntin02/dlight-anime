@@ -3,8 +3,10 @@ package com.dlight.ui.player;
 
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -18,6 +20,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -41,6 +44,11 @@ import com.dlight.data.local.MyStarRecordDao;
 import com.dlight.data.local.PlayRecord;
 import com.dlight.data.local.PlayRecordDao;
 import com.dlight.feature.download.ServiceDownload;
+import com.dlight.feature.download.DownloadContract;
+import com.dlight.feature.download.DownloadTask;
+import com.dlight.feature.download.DownloadTaskStore;
+
+import java.io.File;
 
 public class IntroFragment extends Fragment {
 
@@ -51,11 +59,24 @@ public class IntroFragment extends Fragment {
     private ImageView imageView;
 
     private Button btnStar,btnDownLoader;
+    private View downloadProgressContainer;
+    private ProgressBar downloadProgress;
+    private TextView downloadStatus;
+    private boolean downloadReceiverRegistered;
     private int currentPlayingIndex = 0; // 当前正在播放的索引
 
     private int currentEpisode;
     private List<Button> episodeButtons = new ArrayList<>(); // 保存按钮列表
     private LinearLayout  episodeContainer;
+    private final BroadcastReceiver downloadReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String updatedTaskId = intent.getStringExtra(DownloadContract.EXTRA_TASK_ID);
+            if (getCurrentTaskId().equals(updatedTaskId)) {
+                refreshDownloadState();
+            }
+        }
+    };
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater,
@@ -80,7 +101,10 @@ public class IntroFragment extends Fragment {
         imageView=view.findViewById(R.id.videoImage);
         btnStar=view.findViewById(R.id.btn_star);
         btnDownLoader=view.findViewById(R.id.btn_downloader);
-        currentPlayingIndex=currentEpisode-1;
+        downloadProgressContainer = view.findViewById(R.id.download_progress_container);
+        downloadProgress = view.findViewById(R.id.download_progress);
+        downloadStatus = view.findViewById(R.id.download_status);
+        currentPlayingIndex = Math.max(0, currentEpisode - 1);
         if(videoData!=null){
             String str;
             vodNameView.setText(videoData.getVod_name());
@@ -107,35 +131,111 @@ public class IntroFragment extends Fragment {
         return view;
     }
 
+    @Override
+    public void onStart() {
+        super.onStart();
+        IntentFilter filter = new IntentFilter(DownloadContract.ACTION_UPDATE);
+        ContextCompat.registerReceiver(requireContext(), downloadReceiver, filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED);
+        downloadReceiverRegistered = true;
+        refreshDownloadState();
+    }
+
+    @Override
+    public void onStop() {
+        if (downloadReceiverRegistered) {
+            requireContext().unregisterReceiver(downloadReceiver);
+            downloadReceiverRegistered = false;
+        }
+        super.onStop();
+    }
 
     private void bingBtnDownLoader(){
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(getContext(), Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(
-                    getActivity(),
-                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                    1001
-                );
-            }
-            else {
-                Toast.makeText(getContext(), "权限申请失败！", Toast.LENGTH_SHORT).show();
+        btnDownLoader.setOnClickListener(v->{
+            if (videoData == null || videourls == null || videourls.isEmpty()
+                || currentPlayingIndex < 0 || currentPlayingIndex >= videourls.size()) {
+                Toast.makeText(getContext(), "当前视频暂无可下载地址", Toast.LENGTH_SHORT).show();
                 return;
             }
-        }
-        btnDownLoader.setOnClickListener(v->{
-            Intent intent = new Intent(getContext(), ServiceDownload.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+                && ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(requireActivity(),
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1001);
+            }
+
+            int episode = currentPlayingIndex + 1;
+            String taskId = DownloadContract.taskId(videoData.getVod_id(), episode);
+            DownloadTask existing = DownloadTaskStore.get(requireContext(), taskId);
+            if (existing != null && existing.isActive()) {
+                Toast.makeText(getContext(), "该集正在下载", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (existing != null && existing.isCompleted()
+                && !existing.getFilePath().isEmpty() && new File(existing.getFilePath()).exists()) {
+                Toast.makeText(getContext(), "该集已经缓存", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            Intent intent = new Intent(requireContext(), ServiceDownload.class);
             intent.setAction(ServiceDownload.ACTION_START);
-            intent.putExtra(ServiceDownload.EXTRA_URL, videoData.getVod_play_url());
-            String fileName=videoData.getVod_name()+"—第"+currentEpisode+"集";
-            intent.putExtra(ServiceDownload.EXTRA_FILE_NAME, fileName);
-            intent.putExtra("picUrl",videoData.getVod_pic());
-            getActivity().startService(intent);
-            Log.d("bingBtnDownLoader", "bingBtnDownLoader: onclick");
+            intent.putExtra(DownloadContract.EXTRA_TASK_ID, taskId);
+            intent.putExtra(DownloadContract.EXTRA_VIDEO_ID, videoData.getVod_id());
+            intent.putExtra(DownloadContract.EXTRA_EPISODE, episode);
+            intent.putExtra(DownloadContract.EXTRA_URL, videourls.get(currentPlayingIndex));
+            intent.putExtra(DownloadContract.EXTRA_FILE_NAME,
+                videoData.getVod_name() + "—第" + episode + "集");
+            intent.putExtra(DownloadContract.EXTRA_PIC_URL, videoData.getVod_pic());
+            ContextCompat.startForegroundService(requireContext(), intent);
+            btnDownLoader.setEnabled(false);
+            downloadProgressContainer.setVisibility(View.VISIBLE);
+            downloadProgress.setIndeterminate(true);
+            downloadStatus.setText("正在加入下载队列…");
+            Log.d("bingBtnDownLoader", "开始下载任务: " + taskId);
 
         });
 
+    }
+
+    private String getCurrentTaskId() {
+        if (videoData == null) {
+            return "";
+        }
+        return DownloadContract.taskId(videoData.getVod_id(), currentPlayingIndex + 1);
+    }
+
+    private void refreshDownloadState() {
+        if (videoData == null || downloadProgressContainer == null) {
+            return;
+        }
+        DownloadTask task = DownloadTaskStore.get(requireContext(), getCurrentTaskId());
+        if (task == null) {
+            downloadProgressContainer.setVisibility(View.GONE);
+            btnDownLoader.setEnabled(true);
+            btnDownLoader.setText("下载");
+            return;
+        }
+
+        downloadProgressContainer.setVisibility(View.VISIBLE);
+        downloadProgress.setIndeterminate(DownloadContract.STATUS_QUEUED.equals(task.getStatus()));
+        downloadProgress.setProgress(task.getProgress());
+        if (DownloadContract.STATUS_QUEUED.equals(task.getStatus())) {
+            downloadStatus.setText("等待下载");
+            btnDownLoader.setText("等待中");
+            btnDownLoader.setEnabled(false);
+        } else if (DownloadContract.STATUS_DOWNLOADING.equals(task.getStatus())) {
+            downloadStatus.setText("下载中 " + task.getProgress() + "%");
+            btnDownLoader.setText(task.getProgress() + "%");
+            btnDownLoader.setEnabled(false);
+        } else if (DownloadContract.STATUS_COMPLETED.equals(task.getStatus())) {
+            downloadStatus.setText("已缓存");
+            btnDownLoader.setText("已缓存");
+            btnDownLoader.setEnabled(false);
+        } else {
+            downloadStatus.setText("下载失败，点击重试");
+            btnDownLoader.setText("重试");
+            btnDownLoader.setEnabled(true);
+        }
     }
     private  void bingBtnStar(){
         btnStar.setOnClickListener(v-> {
@@ -193,6 +293,7 @@ public class IntroFragment extends Fragment {
                 currentPlayingIndex = index;
                 activity.getBinding().danmakuPlayer.setUp(nextVideoUrl, true, null, titleName);
                 updateEpisodeButtonStyle();
+                refreshDownloadState();
 
                 SharedPreferences sharedPreferences = getActivity().getSharedPreferences("user_prefs", Context.MODE_PRIVATE);
                 int userId=sharedPreferences.getInt("Id",-1);
@@ -240,5 +341,6 @@ public class IntroFragment extends Fragment {
     public void setCurrentPlayingIndex(int index){
         this.currentPlayingIndex=index;
         updateEpisodeButtonStyle();
+        refreshDownloadState();
     }
 }

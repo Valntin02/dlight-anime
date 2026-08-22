@@ -13,6 +13,7 @@
         android:layout_width="80dp"
         android:layout_height="100dp"
         android:layout_marginEnd="12dp"
+        android:contentDescription="视频封面"
         android:scaleType="centerCrop"
         android:src="@drawable/button_style"/>
 
@@ -31,7 +32,29 @@
             android:text="视频标题"
             android:textSize="14sp"
             android:maxLines="2"
-            android:ellipsize="end"/>
+            android:ellipsize="end"
+            android:textColor="@color/text_primary" />
+
+        <TextView
+            android:id="@+id/tv_download_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:text="等待下载"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <ProgressBar
+            android:id="@+id/item_download_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="8dp"
+            android:max="100"
+            android:progress="0"
+            android:progressTint="@color/brand_500" />
 
     </LinearLayout>
 

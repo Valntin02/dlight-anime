@@ -5,29 +5,29 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.dlight.CachedVideo;
 import com.dlight.R;
 import com.squareup.picasso.Picasso;
 
-import java.io.File;
 import java.util.List;
 
 public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.VideoViewHolder> {
-    public interface OnItemClickListener {
-        void onItemClick(File file);
+    public interface Listener {
+        void onItemClick(DownloadTask task);
+        void onDelete(DownloadTask task);
     }
 
-    private List<CachedVideo> fileList;
-    private OnItemClickListener listener;
+    private final List<DownloadTask> tasks;
+    private final Listener listener;
 
-
-    public AdapterDownVideo(List<CachedVideo> fileList, OnItemClickListener listener) {
-        this.fileList = fileList;
+    public AdapterDownVideo(List<DownloadTask> tasks, Listener listener) {
+        this.tasks = tasks;
         this.listener = listener;
     }
 
@@ -40,48 +40,65 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
 
     @Override
     public void onBindViewHolder(@NonNull VideoViewHolder holder, int position) {
-        CachedVideo cachedVideo=fileList.get(position);
-        File file = cachedVideo.getVideoFile();
-        String picUrl=cachedVideo.getCoverUrl();
+        DownloadTask task = tasks.get(position);
+        holder.title.setText(task.getTitle());
+        holder.image.setImageResource(R.drawable.button_style);
+        if (!task.getCoverUrl().isEmpty()) {
+            Picasso.get().load(task.getCoverUrl()).placeholder(R.drawable.button_style).into(holder.image);
+        }
 
-        if(!picUrl.isEmpty())
-        Picasso.get().load(picUrl).into(holder.imageView);
+        if (DownloadContract.STATUS_QUEUED.equals(task.getStatus())) {
+            holder.status.setText("等待下载");
+            holder.progress.setVisibility(View.VISIBLE);
+            holder.progress.setIndeterminate(true);
+        } else if (DownloadContract.STATUS_DOWNLOADING.equals(task.getStatus())) {
+            holder.status.setText("下载中 " + task.getProgress() + "%");
+            holder.progress.setVisibility(View.VISIBLE);
+            holder.progress.setIndeterminate(false);
+            holder.progress.setProgress(task.getProgress());
+        } else if (DownloadContract.STATUS_COMPLETED.equals(task.getStatus())) {
+            holder.status.setText("已缓存 · 点击播放");
+            holder.progress.setVisibility(View.GONE);
+        } else {
+            String message = task.getErrorMessage().isEmpty() ? "下载失败" : task.getErrorMessage();
+            holder.status.setText("下载失败 · 点击重试\n" + message);
+            holder.progress.setVisibility(View.GONE);
+        }
 
-        holder.textView.setText(file.getName());
-        holder.itemView.setOnClickListener(v -> listener.onItemClick(file));
-
-        // 设置长按删除
+        holder.itemView.setOnClickListener(v -> listener.onItemClick(task));
         holder.itemView.setOnLongClickListener(v -> {
+            if (task.isActive()) {
+                Toast.makeText(holder.itemView.getContext(), "下载中的任务暂不能删除",
+                    Toast.LENGTH_SHORT).show();
+                return true;
+            }
             new AlertDialog.Builder(holder.itemView.getContext())
-                .setTitle("删除视频")
-                .setMessage("确定要删除这个视频吗？")
-                .setPositiveButton("删除", (dialog, which) -> {
-                    int realPos = holder.getAdapterPosition(); // 防止位置异常
-                    File deleteFile = fileList.get(realPos).getVideoFile();
-                    if (deleteFile.exists()) {
-                        deleteFile.delete(); // 删除文件
-                    }
-                    fileList.remove(realPos); // 移除列表
-                    notifyItemRemoved(realPos); // 更新UI
-                })
+                .setTitle("删除缓存任务")
+                .setMessage("确定删除“" + task.getTitle() + "”及其缓存文件吗？")
+                .setPositiveButton("删除", (dialog, which) -> listener.onDelete(task))
                 .setNegativeButton("取消", null)
                 .show();
-            return true; // 表示事件已处理
+            return true;
         });
     }
 
     @Override
     public int getItemCount() {
-        return fileList.size();
+        return tasks.size();
     }
 
     static class VideoViewHolder extends RecyclerView.ViewHolder {
-        TextView textView;
-        ImageView imageView;
-        public VideoViewHolder(@NonNull View itemView) {
+        final TextView title;
+        final TextView status;
+        final ImageView image;
+        final ProgressBar progress;
+
+        VideoViewHolder(@NonNull View itemView) {
             super(itemView);
-            textView = itemView.findViewById(R.id.tv_video_title);
-            imageView=itemView.findViewById(R.id.iv_cover);
+            title = itemView.findViewById(R.id.tv_video_title);
+            status = itemView.findViewById(R.id.tv_download_status);
+            image = itemView.findViewById(R.id.iv_cover);
+            progress = itemView.findViewById(R.id.item_download_progress);
         }
     }
 }

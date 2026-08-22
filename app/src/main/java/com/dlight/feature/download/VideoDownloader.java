@@ -1,7 +1,6 @@
 package com.dlight.feature.download;
 
 import android.content.Context;
-import android.util.Log;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
@@ -18,8 +17,8 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class VideoDownloader {
     public interface DownloadCallback {
@@ -126,148 +125,162 @@ public class VideoDownloader {
      * @param context
      * @param callback
      */
-    public static void mulDownloadM3u8(String m3u8Url, File destination,String fileName, Context context, DownloadCallback callback) {
+    public static void mulDownloadM3u8(String m3u8Url, File destination, String fileName,
+                                       DownloadCallback callback) {
+        ExecutorService executorService = null;
+        File videoTempDir = null;
         try {
-            // 自动创建保存目录（避免 ENOENT）
-            if (!destination.exists()) {
-                destination.mkdirs();
+            if (m3u8Url == null || m3u8Url.trim().isEmpty()) {
+                throw new IOException("下载地址为空");
+            }
+            if (!destination.exists() && !destination.mkdirs()) {
+                throw new IOException("无法创建缓存目录: " + destination.getAbsolutePath());
             }
 
-            // 解析 m3u8 文件
-            URL url = new URL(m3u8Url);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(url.openStream()));
-            String line;
             List<String> tsUrls = new ArrayList<>();
-
-            // 计算 ts 文件的完整地址
-            String baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf("/") + 1);
-
-            while ((line = reader.readLine()) != null) {
-                //直接跳过广告ts
-                if (line.endsWith(".ts") && !line.contains("adjump")) {
-                    if (!line.startsWith("http")) {
-                        tsUrls.add(baseUrl + line); // 拼接完整地址
-                        Log.d("mulDownloadM3u8", "mulDownloadM3u8: "+baseUrl+line);
-                    } else {
-                        tsUrls.add(line); // 已经是完整地址
+            URL playlistUrl = new URL(m3u8Url);
+            URLConnection playlistConnection = playlistUrl.openConnection();
+            playlistConnection.setConnectTimeout(15000);
+            playlistConnection.setReadTimeout(15000);
+            String baseUrl = m3u8Url.substring(0, m3u8Url.lastIndexOf('/') + 1);
+            try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(playlistConnection.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    line = line.trim();
+                    if (line.contains(".ts") && !line.contains("adjump")) {
+                        tsUrls.add(line.startsWith("http") ? line : baseUrl + line);
                     }
                 }
             }
-            reader.close();
-
-
-            // 使用线程池下载 TS 文件
-            ExecutorService executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
-            CountDownLatch latch = new CountDownLatch(tsUrls.size());  // 用于等待所有下载线程完成
-
-            AtomicBoolean hasFailed = new AtomicBoolean(false);
-                int totalTsFiles = tsUrls.size();
-                AtomicInteger completedFiles = new AtomicInteger(0);
-
-            File videoTempDir = new File(destination, "temp");
-            if (!videoTempDir.exists()) {
-                videoTempDir.mkdirs();  // 如果目录不存在，创建它
+            if (tsUrls.isEmpty()) {
+                throw new IOException("播放列表中没有可下载的视频分片");
             }
 
+            String safeName = sanitizeFileName(fileName);
+            videoTempDir = new File(destination,
+                ".temp_" + Integer.toHexString((m3u8Url + safeName).hashCode()));
+            if (!videoTempDir.exists() && !videoTempDir.mkdirs()) {
+                throw new IOException("无法创建临时目录");
+            }
+
+            final File taskTempDir = videoTempDir;
+            int totalTsFiles = tsUrls.size();
+            CountDownLatch latch = new CountDownLatch(totalTsFiles);
+            AtomicInteger completedFiles = new AtomicInteger(0);
+            AtomicReference<Exception> failure = new AtomicReference<>();
+            executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
+
+            for (int i = 0; i < totalTsFiles; i++) {
+                final int index = i;
+                final String tsUrl = tsUrls.get(i);
+                executorService.submit(() -> {
+                    try {
+                        if (failure.get() != null) {
+                            return;
+                        }
+                        downloadSegment(tsUrl, new File(taskTempDir, index + ".ts"));
+                        int completed = completedFiles.incrementAndGet();
+                        callback.onProgress((int) ((completed * 100.0) / totalTsFiles));
+                    } catch (Exception e) {
+                        failure.compareAndSet(null, e);
+                    } finally {
+                        latch.countDown();
+                    }
+                });
+            }
+
+            latch.await();
+            if (failure.get() != null) {
+                throw failure.get();
+            }
+
+            File mergedFile = new File(destination, safeName + ".ts");
+            try (FileOutputStream finalOut = new FileOutputStream(mergedFile, false)) {
                 for (int i = 0; i < totalTsFiles; i++) {
-                    final int index = i;
-                    final String tsUrl = tsUrls.get(i);
-                    //提交到线程池
-                    executorService.submit(() -> {
-
-                        // 如果已经有一个下载失败，跳过该任务
-                        if (hasFailed.get()) {
-                            latch.countDown();  // 仍然减去计数，避免死锁
-                            return;  // 如果失败了，就跳过后面的任务
-                        }
-                        File tempFile = new File(videoTempDir, index+fileName + ".ts");
-                            int maxRetries = 3;
-
-                            for (int retry = 0; retry < maxRetries; retry++) {
-
-                                try  (BufferedInputStream in = new BufferedInputStream(new URL(tsUrl).openStream());
-                                FileOutputStream out = new FileOutputStream(tempFile)) {
-
-                                    byte[] buffer = new byte[4096];
-                                    int count;
-                                    while ((count = in.read(buffer)) != -1) {
-                                        out.write(buffer, 0, count);
-                                    }
-                                    in.close();
-                                    out.close();
-                                    int completed = completedFiles.incrementAndGet();
-                                    int progress = (int) ((completed * 100.0) / totalTsFiles);
-                                    callback.onProgress(progress);
-                                    latch.countDown();
-                                    break;
-
-                            } catch (IOException e) {
-                                    if (retry == maxRetries-1){
-                                        callback.onFailure(e);
-                                        latch.countDown();
-                                        hasFailed.compareAndSet(false, true);
-                                    }
-                                    try {
-                                        Thread.sleep(500 * (retry + 1)); // 加退避时间
-                                    } catch (InterruptedException ex) {
-                                        ex.printStackTrace();
-                                    }
-                                    Log.e("mulDownloadM3u8", "mulDownloadM3u8:重试出错 " );
-                           }
-                            }
-                    });
-                }
-
-            if (hasFailed.get()) {
-                callback.onFailure(new FileNotFoundException("文件下载失败" + fileName));
-                return;
-            }
-
-            // 等所有 ts 文件下载完再合并
-            new Thread(() -> {
-                try {
-                    latch.await();
-                    //最终生成的文件
-                    File mergedFile = new File(destination, fileName);
-                    try (FileOutputStream finalOut = new FileOutputStream(mergedFile)) {
-
-                        for (int i = 0; i < totalTsFiles; i++) {
-                            File tempFile = new File(videoTempDir, i+fileName + ".ts");
-                            if (!tempFile.exists()) {
-                                callback.onFailure(new FileNotFoundException("缺失 TS 文件：" + tempFile.getName()));
-                                //缺失文件  for (int i = 0; i < totalTsFiles; i++)
-                                //删除创建的临时文件 再返回
-                                for (int j = 0; j < totalTsFiles; j++){
-                                    File dtempFile = new File(videoTempDir, j+fileName + ".ts");
-                                    dtempFile.delete();
-                                }
-                                mergedFile.delete();
-                                return;
-                            }
-
-                            try (FileInputStream fis = new FileInputStream(tempFile)) {
-                                byte[] buffer = new byte[4096];
-                                int count;
-                                while ((count = fis.read(buffer)) != -1) {
-                                    finalOut.write(buffer, 0, count);
-                                }
-                            }
-                            tempFile.delete();  // 删除临时文件
+                    File tempFile = new File(videoTempDir, i + ".ts");
+                    if (!tempFile.exists()) {
+                        throw new FileNotFoundException("缺失视频分片: " + i);
+                    }
+                    try (FileInputStream fis = new FileInputStream(tempFile)) {
+                        byte[] buffer = new byte[8192];
+                        int count;
+                        while ((count = fis.read(buffer)) != -1) {
+                            finalOut.write(buffer, 0, count);
                         }
                     }
-
-                    callback.onSuccess(mergedFile);
-                } catch (Exception e) {
-                    callback.onFailure(e);
-                } finally {
-                    executorService.shutdown();
                 }
-            }).start();
-        } catch (Exception e) {
+            }
+            deleteDirectory(videoTempDir);
+            callback.onSuccess(mergedFile);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            if (videoTempDir != null) {
+                deleteDirectory(videoTempDir);
+            }
             callback.onFailure(e);
+        } catch (Exception e) {
+            if (videoTempDir != null) {
+                deleteDirectory(videoTempDir);
+            }
+            callback.onFailure(e);
+        } finally {
+            if (executorService != null) {
+                executorService.shutdownNow();
+            }
         }
+    }
+
+    private static void downloadSegment(String url, File destination) throws IOException {
+        IOException lastError = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                URLConnection connection = new URL(url).openConnection();
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(30000);
+                try (BufferedInputStream in = new BufferedInputStream(connection.getInputStream());
+                     FileOutputStream out = new FileOutputStream(destination, false)) {
+                    byte[] buffer = new byte[8192];
+                    int count;
+                    while ((count = in.read(buffer)) != -1) {
+                        out.write(buffer, 0, count);
+                    }
+                }
+                return;
+            } catch (IOException e) {
+                lastError = e;
+                if (attempt < 3) {
+                    try {
+                        Thread.sleep(500L * attempt);
+                    } catch (InterruptedException interrupted) {
+                        Thread.currentThread().interrupt();
+                        throw new IOException("下载被中断", interrupted);
+                    }
+                }
+            }
+        }
+        throw lastError == null ? new IOException("视频分片下载失败") : lastError;
+    }
+
+    private static String sanitizeFileName(String fileName) {
+        String value = fileName == null ? "video" : fileName.trim();
+        value = value.replaceAll("[\\\\/:*?\"<>|]", "_");
+        return value.isEmpty() ? "video" : value;
+    }
+
+    private static void deleteDirectory(File directory) {
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    deleteDirectory(file);
+                } else {
+                    file.delete();
+                }
+            }
+        }
+        directory.delete();
     }
 
 
 }
-

@@ -1,15 +1,11 @@
 package com.dlight.feature.download;
 
-import android.app.NotificationManager;
 import android.app.Service;
-import android.content.Context;
 import android.content.Intent;
 import android.os.IBinder;
 import android.util.Log;
-import android.widget.Toast;
 
-
-import androidx.media3.exoplayer.offline.DownloadService;
+import com.dlight.util.NotificationUtils;
 
 import org.json.JSONObject;
 
@@ -17,77 +13,140 @@ import java.io.File;
 import java.io.FileWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import com.dlight.util.NotificationUtils;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ServiceDownload extends Service {
     public static final String ACTION_START = "ACTION_START_DOWNLOAD";
-    public static final String EXTRA_URL = "EXTRA_URL";
-    public static final String EXTRA_FILE_NAME = "EXTRA_FILE_NAME";
+    public static final String EXTRA_URL = DownloadContract.EXTRA_URL;
+    public static final String EXTRA_FILE_NAME = DownloadContract.EXTRA_FILE_NAME;
+
+    private static final String TAG = "ServiceDownload";
+    private static final int NOTIFICATION_ID = 1001;
+
+    private final ExecutorService downloadQueue = Executors.newSingleThreadExecutor();
+    private final AtomicInteger pendingTasks = new AtomicInteger(0);
+    private final AtomicInteger latestStartId = new AtomicInteger(0);
+    private final Set<String> activeTaskIds = ConcurrentHashMap.newKeySet();
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && ACTION_START.equals(intent.getAction())) {
-            String url = intent.getStringExtra(EXTRA_URL);
-            String fileName = intent.getStringExtra(EXTRA_FILE_NAME);
-            String picUrl=intent.getStringExtra("picUrl");
-
-            Log.d("ServiceDownload", "onStartCommand: url="+url);
-
-            Toast.makeText(this, "开始下载: " + fileName, Toast.LENGTH_SHORT).show();
-            // 获取应用的私有文件目录，创建一个名为 "video" 的子目录
-            File videoDir = new File(this.getFilesDir(), "video");
-            if (!videoDir.exists()) {
-                videoDir.mkdirs();  // 如果目录不存在，创建它
-            }
-            Log.d("ServiceDownload", "准备启动前台通知");
-            // 启动前台服务
-            startForeground(1, NotificationUtils.build(this, 1,fileName));
-            Log.d("ServiceDownload", "通知启动完毕");
-            NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-            nm.notify(1, NotificationUtils.build(ServiceDownload.this, 1,fileName));
-
-            new Thread(() -> {
-                try {
-                    Log.d("ServiceDownload", "线程开始执行下载逻辑");
-                    VideoDownloader.mulDownloadM3u8(url, videoDir,fileName,this ,new VideoDownloader.DownloadCallback() {
-                        @Override
-                        public void onProgress(int progress) {
-                            //NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                            nm.notify(1, NotificationUtils.build(ServiceDownload.this, progress,fileName));
-                        }
-
-                        @Override
-                        public void onSuccess(File file) {
-                            //Toast.makeText(getApplicationContext(), "下载完成：" + file.getAbsolutePath(), Toast.LENGTH_SHORT).show();
-                            Log.d("ServiceDownload", "onStartCommand"+"下载完成"+file.getAbsolutePath());
-                            saveVideoCoverMapping(fileName,picUrl);
-                            stopForeground(true);
-                            stopSelf();
-                        }
-
-                        @Override
-                        public void onFailure(Exception e) {
-                            Log.e("ServiceDownload", "下载失败", e);
-                            //stopForeground(true)只影响服务的通知，不会阻止后台任务的执行
-                            stopForeground(true);
-                            //NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
-                            nm.cancel(1);
-                            //stopSelf() 会停止服务的生命周期，但 它不会中止线程 或 阻止线程内的执行。也就是说，服务可能已经停止，但线程仍在后台执行其任务。
-                            stopSelf();
-
-
-                        }
-
-
-                    });
-                } catch (Exception e) {
-                    Log.e("ServiceDownload", "下载线程异常", e);
-                    stopForeground(true);
-                    stopSelf();
-                }
-            }).start();
+        if (intent == null || !ACTION_START.equals(intent.getAction())) {
+            return START_NOT_STICKY;
         }
-        return START_NOT_STICKY;
+        latestStartId.set(startId);
+
+        DownloadTask task = taskFromIntent(intent);
+        if (task == null) {
+            Log.e(TAG, "下载参数不完整");
+            stopSelfResult(startId);
+            return START_NOT_STICKY;
+        }
+
+        if (!activeTaskIds.add(task.getTaskId())) {
+            Log.d(TAG, "任务已在队列中: " + task.getTaskId());
+            return START_NOT_STICKY;
+        }
+
+        DownloadTask existing = DownloadTaskStore.get(this, task.getTaskId());
+        if (existing != null && existing.isCompleted()
+            && !existing.getFilePath().isEmpty() && new File(existing.getFilePath()).exists()) {
+            activeTaskIds.remove(task.getTaskId());
+            broadcastUpdate(existing);
+            return START_NOT_STICKY;
+        }
+
+        DownloadTaskStore.upsert(this, task);
+        broadcastUpdate(task);
+        pendingTasks.incrementAndGet();
+        startForeground(NOTIFICATION_ID,
+            NotificationUtils.build(this, task.getTitle(), 0, DownloadContract.STATUS_QUEUED));
+
+        downloadQueue.execute(() -> runDownload(task));
+        return START_REDELIVER_INTENT;
+    }
+
+    private DownloadTask taskFromIntent(Intent intent) {
+        String taskId = intent.getStringExtra(DownloadContract.EXTRA_TASK_ID);
+        String url = intent.getStringExtra(DownloadContract.EXTRA_URL);
+        String fileName = intent.getStringExtra(DownloadContract.EXTRA_FILE_NAME);
+        int videoId = intent.getIntExtra(DownloadContract.EXTRA_VIDEO_ID, -1);
+        int episode = intent.getIntExtra(DownloadContract.EXTRA_EPISODE, 1);
+        String picUrl = intent.getStringExtra(DownloadContract.EXTRA_PIC_URL);
+        if (taskId == null || taskId.isEmpty() || url == null || url.trim().isEmpty()
+            || fileName == null || fileName.trim().isEmpty()) {
+            return null;
+        }
+        return DownloadTask.queued(taskId, videoId, episode, fileName, url, picUrl);
+    }
+
+    private void runDownload(DownloadTask task) {
+        task.setStatus(DownloadContract.STATUS_DOWNLOADING);
+        task.setProgress(0);
+        task.setErrorMessage("");
+        publish(task);
+
+        File videoDir = new File(getFilesDir(), "video");
+        VideoDownloader.mulDownloadM3u8(task.getUrl(), videoDir, task.getTitle(),
+            new VideoDownloader.DownloadCallback() {
+                @Override
+                public void onProgress(int progress) {
+                    synchronized (task) {
+                        if (progress <= task.getProgress()) {
+                            return;
+                        }
+                        task.setProgress(progress);
+                        publish(task);
+                    }
+                }
+
+                @Override
+                public void onSuccess(File file) {
+                    task.setProgress(100);
+                    task.setFilePath(file.getAbsolutePath());
+                    task.setStatus(DownloadContract.STATUS_COMPLETED);
+                    task.setErrorMessage("");
+                    saveVideoCoverMapping(task.getTitle(), task.getCoverUrl());
+                    publish(task);
+                }
+
+                @Override
+                public void onFailure(Exception error) {
+                    task.setStatus(DownloadContract.STATUS_FAILED);
+                    task.setErrorMessage(error.getMessage() == null ? "下载失败" : error.getMessage());
+                    publish(task);
+                    Log.e(TAG, "下载失败: " + task.getTaskId(), error);
+                }
+            });
+
+        activeTaskIds.remove(task.getTaskId());
+        if (pendingTasks.decrementAndGet() == 0) {
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            stopSelfResult(latestStartId.get());
+        }
+    }
+
+    private void publish(DownloadTask task) {
+        DownloadTaskStore.upsert(this, task);
+        broadcastUpdate(task);
+        startForeground(NOTIFICATION_ID,
+            NotificationUtils.build(this, task.getTitle(), task.getProgress(), task.getStatus()));
+    }
+
+    private void broadcastUpdate(DownloadTask task) {
+        Intent update = new Intent(DownloadContract.ACTION_UPDATE);
+        update.setPackage(getPackageName());
+        update.putExtra(DownloadContract.EXTRA_TASK_ID, task.getTaskId());
+        sendBroadcast(update);
+    }
+
+    @Override
+    public void onDestroy() {
+        downloadQueue.shutdownNow();
+        super.onDestroy();
     }
 
     @Override
@@ -95,30 +154,21 @@ public class ServiceDownload extends Service {
         return null;
     }
 
-    private void saveVideoCoverMapping(String fileName,String picUrl){
+    private void saveVideoCoverMapping(String fileName, String picUrl) {
         try {
             File videoDir = new File(getFilesDir(), "video");
             File jsonFile = new File(videoDir, "cover_map.json");
-
             JSONObject jsonObject = new JSONObject();
-
-            // 如果文件存在，先读取原来的内容
             if (jsonFile.exists()) {
                 String json = new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8);
                 jsonObject = new JSONObject(json);
             }
-
-            // 添加或更新映射
-            jsonObject.put(fileName, picUrl);
-
-            // 写回文件
-            //new FileWriter(jsonFile) 会自动创建文件（如果该文件不存在）
+            jsonObject.put(fileName, picUrl == null ? "" : picUrl);
             try (FileWriter writer = new FileWriter(jsonFile)) {
                 writer.write(jsonObject.toString());
             }
-
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "保存封面映射失败", e);
         }
     }
 }
