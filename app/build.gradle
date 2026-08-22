@@ -3,6 +3,16 @@ apply plugin: "com.android.application"
 apply from: "$rootDir/gradle/base.gradle"
 apply from: "../gradle/exported.gradle"
 
+def quoteBuildConfig = { String value ->
+    '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
+def debugApiBaseUrl = providers.gradleProperty("DLIGHT_DEBUG_API_BASE_URL")
+    .orElse("http://10.0.2.2:8000/")
+    .get()
+def releaseApiBaseUrl = providers.gradleProperty("DLIGHT_RELEASE_API_BASE_URL")
+    .orElse("")
+    .get()
+
 android {
     defaultConfig {
         applicationId "com.dlight"
@@ -35,10 +45,12 @@ android {
         debug {
             minifyEnabled false
             signingConfig signingConfigs.release
+            buildConfigField "String", "API_BASE_URL", quoteBuildConfig(debugApiBaseUrl)
         }
         release {
             minifyEnabled true
             signingConfig signingConfigs.release
+            buildConfigField "String", "API_BASE_URL", quoteBuildConfig(releaseApiBaseUrl)
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
     }
@@ -49,6 +61,14 @@ android {
 
 
     namespace 'com.dlight'
+}
+
+tasks.matching { it.name == "preReleaseBuild" }.configureEach {
+    doFirst {
+        if (releaseApiBaseUrl.trim().isEmpty()) {
+            throw new GradleException("Set -PDLIGHT_RELEASE_API_BASE_URL=https://host/ for release builds")
+        }
+    }
 }
 
 dependencies {
