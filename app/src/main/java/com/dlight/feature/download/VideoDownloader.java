@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.URL;
@@ -167,16 +168,8 @@ public class VideoDownloader {
 
             final File taskTempDir = videoTempDir;
             int totalTsFiles = tsUrls.size();
-            List<Integer> missingSegments = new ArrayList<>();
-            int existingSegments = 0;
-            for (int i = 0; i < totalTsFiles; i++) {
-                File segment = new File(taskTempDir, i + ".ts");
-                if (segment.exists() && segment.length() > 0) {
-                    existingSegments++;
-                } else {
-                    missingSegments.add(i);
-                }
-            }
+            List<Integer> missingSegments = findMissingSegments(taskTempDir, totalTsFiles);
+            int existingSegments = totalTsFiles - missingSegments.size();
             CountDownLatch latch = new CountDownLatch(missingSegments.size());
             AtomicInteger completedFiles = new AtomicInteger(existingSegments);
             AtomicReference<Exception> failure = new AtomicReference<>();
@@ -213,35 +206,15 @@ public class VideoDownloader {
             throwIfPaused(pauseSignal);
 
             File mergedFile = new File(destination, safeName + ".ts");
-            try (FileOutputStream finalOut = new FileOutputStream(mergedFile, false)) {
-                for (int i = 0; i < totalTsFiles; i++) {
-                    File tempFile = new File(videoTempDir, i + ".ts");
-                    if (!tempFile.exists()) {
-                        throw new FileNotFoundException("缺失视频分片: " + i);
-                    }
-                    try (FileInputStream fis = new FileInputStream(tempFile)) {
-                        byte[] buffer = new byte[8192];
-                        int count;
-                        while ((count = fis.read(buffer)) != -1) {
-                            finalOut.write(buffer, 0, count);
-                        }
-                    }
-                }
-            }
+            mergeSegments(videoTempDir, totalTsFiles, mergedFile);
             deleteDirectory(videoTempDir);
             callback.onSuccess(mergedFile);
         } catch (DownloadPausedException e) {
             callback.onPaused();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            if (videoTempDir != null) {
-                deleteDirectory(videoTempDir);
-            }
             callback.onFailure(e);
         } catch (Exception e) {
-            if (videoTempDir != null) {
-                deleteDirectory(videoTempDir);
-            }
             callback.onFailure(e);
         } finally {
             if (executorService != null) {
@@ -266,19 +239,10 @@ public class VideoDownloader {
                     if (body == null) {
                         throw new IOException("视频分片响应内容为空");
                     }
-                    try (BufferedInputStream in = new BufferedInputStream(body.byteStream());
-                     FileOutputStream out = new FileOutputStream(destination, false)) {
-                        byte[] buffer = new byte[8192];
-                        int count;
-                        while ((count = in.read(buffer)) != -1) {
-                            throwIfPaused(pauseSignal);
-                            out.write(buffer, 0, count);
-                        }
-                    }
+                    writeSegment(body.byteStream(), destination, pauseSignal);
                 }
                 return;
             } catch (DownloadPausedException e) {
-                destination.delete();
                 throw e;
             } catch (IOException e) {
                 lastError = e;
@@ -293,6 +257,89 @@ public class VideoDownloader {
             }
         }
         throw lastError == null ? new IOException("视频分片下载失败") : lastError;
+    }
+
+    static void writeSegment(InputStream input, File destination, PauseSignal pauseSignal)
+            throws IOException {
+        File partFile = new File(destination.getParentFile(), destination.getName() + ".part");
+        deleteIfExists(partFile);
+        boolean published = false;
+        try {
+            try (BufferedInputStream in = new BufferedInputStream(input);
+                 FileOutputStream out = new FileOutputStream(partFile, false)) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = in.read(buffer)) != -1) {
+                    throwIfPaused(pauseSignal);
+                    out.write(buffer, 0, count);
+                }
+            }
+            replaceWithPartFile(partFile, destination, "无法保存完整视频分片");
+            published = true;
+        } finally {
+            if (!published) {
+                partFile.delete();
+            }
+        }
+    }
+
+    static File mergeSegments(File tempDirectory, int totalSegments, File destination)
+            throws IOException {
+        File partFile = new File(destination.getParentFile(), destination.getName() + ".part");
+        deleteIfExists(partFile);
+        deleteIfExists(destination);
+        boolean published = false;
+        try {
+            try (FileOutputStream finalOut = new FileOutputStream(partFile, false)) {
+                for (int i = 0; i < totalSegments; i++) {
+                    File segment = new File(tempDirectory, i + ".ts");
+                    if (!segment.exists() || segment.length() <= 0) {
+                        throw new FileNotFoundException("缺失视频分片: " + i);
+                    }
+                    try (FileInputStream input = new FileInputStream(segment)) {
+                        byte[] buffer = new byte[8192];
+                        int count;
+                        while ((count = input.read(buffer)) != -1) {
+                            finalOut.write(buffer, 0, count);
+                        }
+                    }
+                }
+            }
+            replaceWithPartFile(partFile, destination, "无法保存完整视频文件");
+            published = true;
+            return destination;
+        } finally {
+            if (!published) {
+                partFile.delete();
+                destination.delete();
+            }
+        }
+    }
+
+    static List<Integer> findMissingSegments(File tempDirectory, int totalSegments) {
+        List<Integer> missingSegments = new ArrayList<>();
+        for (int i = 0; i < totalSegments; i++) {
+            File segment = new File(tempDirectory, i + ".ts");
+            if (!segment.exists() || segment.length() <= 0) {
+                missingSegments.add(i);
+            }
+        }
+        return missingSegments;
+    }
+
+    private static void replaceWithPartFile(File partFile, File destination, String errorMessage)
+            throws IOException {
+        deleteIfExists(destination);
+        if (!partFile.renameTo(destination)) {
+            partFile.delete();
+            throw new IOException(errorMessage);
+        }
+    }
+
+    private static void deleteIfExists(File file) throws IOException {
+        if (file.exists() && !file.delete()) {
+            throw new IOException("无法删除不完整文件: " + file.getAbsolutePath());
+        }
     }
 
     private static Response openSegmentResponse(String url, boolean allowPrivate)
