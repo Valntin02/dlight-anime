@@ -200,6 +200,8 @@ Using JUnit `TemporaryFolder` and local `file:` URLs, assert:
 - a read failure removes only `.part` and never leaves a positive-length final segment;
 - merge writes `title.ts.part`, renames only after all input segments are read, and leaves no final file after a missing segment failure;
 - ordinary task failure preserves already completed segment files for retry;
+- resumable segments are reused only when an atomically stored SHA-256 fingerprint of the ordered segment URL list matches; legacy/mismatched temp directories are cleared;
+- an interrupted or failed task cancels active OkHttp calls and joins all workers before emitting its terminal callback, so no late writes or progress occur;
 - explicit `deletePartialDownload` still removes the task temp directory.
 
 Expose only package-visible helpers required by tests; do not make transfer internals public API.
@@ -232,6 +234,8 @@ Every failure and pause path deletes the `.part` file. Retry attempts start with
 Merge into `<safeName>.ts.part`; rename to `<safeName>.ts` only after all segment reads and flush/close succeed. On merge failure, delete the merge `.part` and any incomplete final file, but retain completed numbered segments.
 
 Change ordinary and interrupted task failure handling so it no longer deletes `videoTempDir`. Pause already preserves it. Only success and explicit user delete remove the temp directory.
+
+Track every active segment `Call`. On first failure, pause, or interruption, cancel all calls and wait for workers to terminate before `onFailure`/`onPaused` returns. Before reusing numbered segments, compare an atomically written SHA-256 fingerprint of the ordered segment URL list; clear legacy or mismatched temp directories. Remove stale `.part` files and numbered files beyond the current playlist length.
 
 - [ ] **Step 5: Run file tests, all tests, and build**
 
