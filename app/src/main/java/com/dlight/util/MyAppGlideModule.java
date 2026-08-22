@@ -6,7 +6,7 @@ import com.bumptech.glide.integration.okhttp3.OkHttpUrlLoader;
 import com.bumptech.glide.load.model.GlideUrl;
 import com.bumptech.glide.module.AppGlideModule;
 import com.bumptech.glide.Registry;
-import com.dlight.data.remote.NetworkHelper;
+import com.dlight.network.HttpClientFactory;
 
 import java.io.InputStream;
 
@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient;
 public class MyAppGlideModule extends AppGlideModule {
     @Override
     public void registerComponents(Context context, Glide glide, Registry registry) {
-        OkHttpClient okHttpClient = NetworkHelper.getOkHttpClient(); // 获取自定义的 OkHttpClient
+        OkHttpClient okHttpClient = HttpClientFactory.imageClient();
         registry.replace(GlideUrl.class, InputStream.class, new OkHttpUrlLoader.Factory((okhttp3.Call.Factory) okHttpClient));
     }
 }

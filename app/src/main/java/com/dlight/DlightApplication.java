@@ -10,9 +10,8 @@ import androidx.media3.datasource.TransferListener;
 import androidx.media3.exoplayer.source.MediaSource;
 import androidx.multidex.MultiDexApplication;
 
-import com.dlight.network.NetworkManager;
+import com.dlight.network.NetworkConfig;
 import com.dlight.network.exosource.DlightExoHttpDataSourceFactory;
-import com.dlight.util.Param;
 
 import java.io.File;
 import java.util.Map;
@@ -37,10 +36,7 @@ public class DlightApplication extends MultiDexApplication {
         context = getApplicationContext();
 
         Log.d(TAG, "DlightApplication started");
-        Log.d(TAG, "API baseUrl resolved: " + Param.getInstance().getBaseUrl());
-
-        // 初始化网络管理器
-        initNetworkManager();
+        Log.d(TAG, "API baseUrl resolved: " + NetworkConfig.apiBaseUrl());
 
         // 初始化视频播放器配置
 
@@ -48,18 +44,6 @@ public class DlightApplication extends MultiDexApplication {
 
         // 配置Exo数据源
         initExoDataSource();
-    }
-
-    /**
-     * 初始化网络管理器
-     */
-    private void initNetworkManager() {
-        try {
-            NetworkManager.getInstance(this);
-            Log.d(TAG, "NetworkManager initialized");
-        } catch (Exception e) {
-            Log.e(TAG, "Failed to initialize NetworkManager", e);
-        }
     }
 
     /**

@@ -26,8 +26,8 @@ import com.dlight.data.local.PlayRecord;
 import com.dlight.data.local.PlayRecordDao;
 import com.dlight.data.remote.ApiClient;
 import com.dlight.data.remote.ApiService;
-import com.dlight.data.remote.NetworkHelper;
 import com.dlight.data.remote.RetrofitClient;
+import com.dlight.network.HttpClientFactory;
 import com.dlight.util.Param;
 import com.dlight.databinding.ActivityDanmakuLayoutBinding;
 import com.dlight.feature.comment.CommentFragment;
@@ -318,7 +318,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
 private void getDanmu() {
 
     //设置使用自定义的okhttp验证方式
-    OkHttpUtils.initClient(NetworkHelper.getOkHttpClient());
+    OkHttpUtils.initClient(HttpClientFactory.apiClient());
     // 构建 JSON 数据，int 不需要转换为字符串
     int vod_id=videoData.getVod_id() ,vod_nid= binding.danmakuPlayer.getCurrentEpisode();
 
