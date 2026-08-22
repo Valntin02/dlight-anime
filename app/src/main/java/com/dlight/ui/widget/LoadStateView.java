@@ -13,10 +13,6 @@ import android.widget.TextView;
 import com.dlight.R;
 
 public class LoadStateView extends LinearLayout {
-    private static final String DEFAULT_LOADING_MESSAGE = "加载中…";
-    private static final String DEFAULT_EMPTY_MESSAGE = "暂无内容";
-    private static final String DEFAULT_ERROR_MESSAGE = "加载失败，请重试";
-
     private final ProgressBar progressBar;
     private final TextView messageView;
     private final Button retryButton;
@@ -34,14 +30,17 @@ public class LoadStateView extends LinearLayout {
 
         setOrientation(VERTICAL);
         setGravity(Gravity.CENTER);
+        setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
         int contentPadding = dp(16);
         setPadding(contentPadding, contentPadding, contentPadding, contentPadding);
 
         progressBar = new ProgressBar(context);
+        progressBar.setId(R.id.load_state_progress);
         progressBar.setIndeterminateTintList(ColorStateList.valueOf(context.getColor(R.color.brand_500)));
         addView(progressBar, new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT));
 
         messageView = new TextView(context);
+        messageView.setId(R.id.load_state_message);
         messageView.setGravity(Gravity.CENTER);
         messageView.setTextColor(context.getColor(R.color.text_secondary));
         messageView.setTextSize(14);
@@ -53,10 +52,13 @@ public class LoadStateView extends LinearLayout {
         addView(messageView, messageParams);
 
         retryButton = new Button(context);
-        retryButton.setText("重试");
-        retryButton.setTextColor(context.getColor(R.color.text_on_brand));
+        retryButton.setId(R.id.load_state_retry);
+        retryButton.setText(R.string.load_state_retry);
+        retryButton.setTextColor(context.getColor(R.color.dark_bg));
         retryButton.setTextSize(14);
         retryButton.setAllCaps(false);
+        retryButton.setFocusable(true);
+        retryButton.setContentDescription(context.getString(R.string.load_state_retry));
         retryButton.setBackgroundTintList(ColorStateList.valueOf(context.getColor(R.color.brand_500)));
         retryButton.setMinWidth(dp(48));
         retryButton.setMinHeight(dp(48));
@@ -71,15 +73,15 @@ public class LoadStateView extends LinearLayout {
     }
 
     public void showLoading(String message) {
-        show(message, DEFAULT_LOADING_MESSAGE, true, false);
+        show(message, R.string.load_state_loading_default, true, false);
     }
 
     public void showEmpty(String message) {
-        show(message, DEFAULT_EMPTY_MESSAGE, false, false);
+        show(message, R.string.load_state_empty_default, false, false);
     }
 
     public void showError(String message) {
-        show(message, DEFAULT_ERROR_MESSAGE, false, true);
+        show(message, R.string.load_state_error_default, false, true);
     }
 
     public void hide() {
@@ -90,28 +92,23 @@ public class LoadStateView extends LinearLayout {
         retryButton.setOnClickListener(listener);
     }
 
-    ProgressBar getProgressBar() {
-        return progressBar;
-    }
-
-    TextView getMessageView() {
-        return messageView;
-    }
-
-    Button getRetryButton() {
-        return retryButton;
-    }
-
     private void show(
         String message,
-        String defaultMessage,
+        int defaultMessageResource,
         boolean showProgress,
         boolean showRetry
     ) {
-        messageView.setText(isBlank(message) ? defaultMessage : message);
+        String resolvedMessage = isBlank(message)
+            ? getResources().getString(defaultMessageResource)
+            : message;
+        messageView.setText(resolvedMessage);
+        setContentDescription(resolvedMessage);
         progressBar.setVisibility(showProgress ? View.VISIBLE : View.GONE);
         retryButton.setVisibility(showRetry ? View.VISIBLE : View.GONE);
         setVisibility(VISIBLE);
+        if (isAttachedToWindow()) {
+            announceForAccessibility(resolvedMessage);
+        }
     }
 
     private boolean isBlank(String message) {

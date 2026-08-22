@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="load_state_progress" type="id" />
+    <item name="load_state_message" type="id" />
+    <item name="load_state_retry" type="id" />
+</resources>
