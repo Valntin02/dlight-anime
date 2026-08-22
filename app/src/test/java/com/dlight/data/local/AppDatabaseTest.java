@@ -83,6 +83,42 @@ public class AppDatabaseTest {
     }
 
     @Test
+    public void unsupportedNewerCanonicalSchemaFailsWithoutDeletingExistingData() throws Exception {
+        File canonicalFile = context.getDatabasePath(AppDatabase.CANONICAL_DB_NAME);
+        assertTrue(canonicalFile.getParentFile().mkdirs()
+            || canonicalFile.getParentFile().isDirectory());
+        SQLiteDatabase fixture = SQLiteDatabase.openOrCreateDatabase(canonicalFile, null);
+        try {
+            fixture.execSQL("CREATE TABLE sentinel (value TEXT NOT NULL)");
+            fixture.execSQL("INSERT INTO sentinel (value) VALUES ('preserve me')");
+            fixture.setVersion(2);
+        } finally {
+            fixture.close();
+        }
+
+        try {
+            inBackground(() -> {
+                AppDatabase database = AppDatabase.getInstancePlayRecord(context);
+                database.playRecordDao().getAllPlayRecords();
+                return null;
+            });
+            fail("Expected unsupported newer schema to fail opening");
+        } catch (ExecutionException expected) {
+            assertTrue(expected.getCause() instanceof IllegalStateException);
+        }
+
+        SQLiteDatabase reopened = SQLiteDatabase.openDatabase(
+            canonicalFile.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+        try (android.database.Cursor cursor = reopened.rawQuery(
+                "SELECT value FROM sentinel", null)) {
+            assertTrue(cursor.moveToFirst());
+            assertEquals("preserve me", cursor.getString(0));
+        } finally {
+            reopened.close();
+        }
+    }
+
+    @Test
     public void importsPlayAndFavoriteRowsFromLegacyDatabase() throws Exception {
         PlayRecord legacyPlay = playRecord(41, 101, "legacy play");
         legacyPlay.setId(987);

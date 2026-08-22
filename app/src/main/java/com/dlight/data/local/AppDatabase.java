@@ -6,7 +6,7 @@ import androidx.room.Room;
 import androidx.room.RoomDatabase;
 
 //这里添加表了之后需要在这里增加实体类不然找不到
-@Database(entities = {PlayRecord.class, MyStarRecord.class}, version = 1, exportSchema = false)
+@Database(entities = {PlayRecord.class, MyStarRecord.class}, version = 1, exportSchema = true)
 public abstract class AppDatabase extends RoomDatabase {
 
     static final String CANONICAL_DB_NAME = "play_record_db";
@@ -31,7 +31,6 @@ public abstract class AppDatabase extends RoomDatabase {
         if (instance == null) {
             instance = Room.databaseBuilder(applicationContext,
                     AppDatabase.class, CANONICAL_DB_NAME)
-                .fallbackToDestructiveMigration() // 若数据库版本更新，清空数据库
                 .build();
         }
         LegacyRecordImporter.importIfNeeded(applicationContext, instance);
