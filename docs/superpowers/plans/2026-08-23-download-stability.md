@@ -80,7 +80,7 @@ public static final class Variant {
 }
 ```
 
-Validate `baseUri` as hierarchical HTTP(S) with a host and no user info. Parse line-by-line. A `#EXT-X-STREAM-INF` line marks only the next non-comment URI as a variant. Resolve URIs with `baseUri.resolve`, accept only hierarchical HTTP(S), and reject invalid ports/user info/fragments.
+Validate `baseUri` as hierarchical HTTP(S) with a host and no user info. Parse with a buffered reader rather than `String.split`. Reject input over 2 MiB characters, lines over 8,192 characters, more than 100,000 lines, or more than 20,000 URI entries. A `#EXT-X-STREAM-INF` line marks only the next non-comment URI as a variant. Resolve URIs with `baseUri.resolve`, accept only hierarchical HTTP(S), and reject invalid ports/user info/fragments.
 
 When no master marker is pending, a non-comment URI is a media segment. Once the document contains master variants, return variants and no segment list so a malformed mixed document cannot be merged accidentally.
 
@@ -98,6 +98,8 @@ if (upper.startsWith("#EXT-X-KEY")) {
     }
 }
 ```
+
+Match HLS tags by complete name plus an optional `:` boundary, not by arbitrary prefix. Parse all HLS attribute lists with one quote-aware tokenizer. Reject malformed/unclosed strings and duplicate keys; read `METHOD` and positive `BANDWIDTH` only from exact attribute keys so quoted values cannot inject fake attributes.
 
 - [ ] **Step 4: Run focused and full unit tests**
 
