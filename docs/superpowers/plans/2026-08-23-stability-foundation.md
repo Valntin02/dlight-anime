@@ -14,6 +14,7 @@
 
 - Create `app/src/main/java/com/dlight/network/NetworkConfig.java`: validate and normalize the one API base URL.
 - Create `app/src/main/java/com/dlight/network/HttpClientFactory.java`: build independent API and image clients.
+- Create `app/src/main/java/com/dlight/network/SafeRequestLoggingInterceptor.java`: log Debug request metadata without query, headers, credentials, or bodies.
 - Modify `app/src/main/java/com/dlight/data/remote/RetrofitClient.java`: retain the legacy public API while using the new configuration/client.
 - Modify `app/src/main/java/com/dlight/DlightApplication.java`: stop eagerly creating the unused second Retrofit stack.
 - Delete `app/src/main/java/com/dlight/data/remote/NetworkHelper.java`: remove the fixed-IP trust store and verifier after callers migrate.
@@ -65,6 +66,8 @@ dependencies {
     androidTestImplementation testDependencies.espressoCore
 }
 ```
+
+Create `SafeRequestLoggingInterceptor.java` as a Debug-only interceptor. Its formatter must build the safe URL from `scheme`, `host`, non-default `port`, and `encodedPath`; it must never call `HttpUrl.toString()` or log query, user info, headers, or bodies. Add `SafeRequestLoggingInterceptorTest` with a URL containing credentials and `?input_search=private`, and assert neither credentials nor query data appears in request or response messages.
 
 - [ ] **Step 2: Define build-type API values**
 
@@ -217,12 +220,14 @@ git commit -m "refactor: centralize API environment config"
 
 **Files:**
 - Create: `app/src/main/java/com/dlight/network/HttpClientFactory.java`
+- Create: `app/src/main/java/com/dlight/network/SafeRequestLoggingInterceptor.java`
 - Modify: `app/src/main/java/com/dlight/data/remote/RetrofitClient.java`
 - Modify: `app/src/main/java/com/dlight/DlightApplication.java`
 - Modify: `app/src/main/java/com/dlight/util/MyAppGlideModule.java`
 - Modify: `app/src/main/java/com/dlight/ui/player/DanmkuVideoActivity.java`
 - Delete: `app/src/main/java/com/dlight/data/remote/NetworkHelper.java`
 - Test: `app/src/test/java/com/dlight/network/HttpClientFactoryTest.java`
+- Test: `app/src/test/java/com/dlight/network/SafeRequestLoggingInterceptorTest.java`
 
 - [ ] **Step 1: Write failing client policy tests**
 
@@ -244,8 +249,10 @@ public class HttpClientFactoryTest {
         assertNotSame(HttpClientFactory.apiClient(), HttpClientFactory.imageClient());
         assertSame(ProxySelector.getDefault(), HttpClientFactory.apiClient().proxySelector());
         assertSame(ProxySelector.getDefault(), HttpClientFactory.imageClient().proxySelector());
-        assertFalse(HttpClientFactory.imageClient().interceptors().stream()
+        assertFalse(HttpClientFactory.apiClient().interceptors().stream()
             .anyMatch(interceptor -> interceptor.getClass().getName().contains("HttpLoggingInterceptor")));
+        assertFalse(HttpClientFactory.imageClient().interceptors().stream()
+            .anyMatch(interceptor -> interceptor instanceof SafeRequestLoggingInterceptor));
     }
 }
 ```
@@ -271,7 +278,6 @@ package com.dlight.network;
 import com.dlight.BuildConfig;
 import java.util.concurrent.TimeUnit;
 import okhttp3.OkHttpClient;
-import okhttp3.logging.HttpLoggingInterceptor;
 
 public final class HttpClientFactory {
     private static final OkHttpClient API_CLIENT = buildApiClient();
@@ -291,10 +297,7 @@ public final class HttpClientFactory {
     private static OkHttpClient buildApiClient() {
         OkHttpClient.Builder builder = buildBaseClient();
         if (BuildConfig.DEBUG) {
-            HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
-            logging.redactHeader("Authorization");
-            logging.setLevel(HttpLoggingInterceptor.Level.BASIC);
-            builder.addInterceptor(logging);
+            builder.addInterceptor(new SafeRequestLoggingInterceptor());
         }
         return builder.build();
     }
@@ -350,11 +353,11 @@ registry.replace(
 );
 ```
 
-In `DanmkuVideoActivity`, replace `NetworkHelper.getOkHttpClient()` with `HttpClientFactory.apiClient()` and update the import.
+In `DanmkuVideoActivity`, replace `NetworkHelper.getOkHttpClient()` with `HttpClientFactory.apiClient()`, update the import, and build `/api/danmaku/get-mobile` from `NetworkConfig.apiBaseUrl()` rather than `Param`.
 
 - [ ] **Step 6: Remove eager unused NetworkManager initialization**
 
-In `DlightApplication`, remove the `NetworkManager` import, `initNetworkManager()` call, and the private `initNetworkManager()` method. Log the normalized value using `NetworkConfig.apiBaseUrl()`.
+In `DlightApplication`, remove the `NetworkManager` import, `initNetworkManager()` call, and the private `initNetworkManager()` method. Do not log the full configured base URL.
 
 - [ ] **Step 7: Delete NetworkHelper and prove no references remain**
 
@@ -379,11 +382,13 @@ Expected: `BUILD SUCCESSFUL`.
 
 ```bash
 git add app/src/main/java/com/dlight/network/HttpClientFactory.java \
+  app/src/main/java/com/dlight/network/SafeRequestLoggingInterceptor.java \
   app/src/main/java/com/dlight/data/remote/RetrofitClient.java \
   app/src/main/java/com/dlight/DlightApplication.java \
   app/src/main/java/com/dlight/util/MyAppGlideModule.java \
   app/src/main/java/com/dlight/ui/player/DanmkuVideoActivity.java \
-  app/src/test/java/com/dlight/network/HttpClientFactoryTest.java
+  app/src/test/java/com/dlight/network/HttpClientFactoryTest.java \
+  app/src/test/java/com/dlight/network/SafeRequestLoggingInterceptorTest.java
 git add -u app/src/main/java/com/dlight/data/remote/NetworkHelper.java
 git commit -m "refactor: separate API and image network clients"
 ```
