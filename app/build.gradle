@@ -3,12 +3,48 @@ apply plugin: "com.android.application"
 apply from: "$rootDir/gradle/base.gradle"
 apply from: "../gradle/exported.gradle"
 
+def containsControlCharacter = { String value ->
+    value != null && value.toCharArray().any { Character.isISOControl(it as char) }
+}
 def quoteBuildConfig = { String value ->
+    if (containsControlCharacter(value)) {
+        throw new GradleException("BuildConfig values must not contain control characters")
+    }
     '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
 }
-def debugApiBaseUrl = providers.gradleProperty("DLIGHT_DEBUG_API_BASE_URL")
+def validateApiBaseUrl = { String propertyName, String rawValue ->
+    if (rawValue == null || rawValue.trim().isEmpty()) {
+        throw new GradleException("Set -P${propertyName}=https://host/ for this build")
+    }
+    if (containsControlCharacter(rawValue)) {
+        throw new GradleException("${propertyName} must not contain control characters")
+    }
+
+    def value = rawValue.trim()
+    java.net.URI uri
+    try {
+        uri = java.net.URI.create(value)
+    } catch (IllegalArgumentException error) {
+        throw new GradleException("${propertyName} is not a valid URL", error)
+    }
+
+    def scheme = uri.scheme
+    def port = uri.port
+    if (!(scheme?.equalsIgnoreCase("http") || scheme?.equalsIgnoreCase("https"))
+        || uri.host == null || uri.rawQuery != null || uri.rawFragment != null
+        || port < -1 || port == 0 || port > 65535) {
+        throw new GradleException(
+            "${propertyName} must use http or https, include a host and valid port, and omit query and fragment"
+        )
+    }
+    value
+}
+def debugApiBaseUrl = validateApiBaseUrl(
+    "DLIGHT_DEBUG_API_BASE_URL",
+    providers.gradleProperty("DLIGHT_DEBUG_API_BASE_URL")
     .orElse("http://10.0.2.2:8000/")
     .get()
+)
 def releaseApiBaseUrl = providers.gradleProperty("DLIGHT_RELEASE_API_BASE_URL")
     .orElse("")
     .get()
@@ -65,9 +101,7 @@ android {
 
 tasks.matching { it.name == "preReleaseBuild" }.configureEach {
     doFirst {
-        if (releaseApiBaseUrl.trim().isEmpty()) {
-            throw new GradleException("Set -PDLIGHT_RELEASE_API_BASE_URL=https://host/ for release builds")
-        }
+        validateApiBaseUrl("DLIGHT_RELEASE_API_BASE_URL", releaseApiBaseUrl)
     }
 }
 
