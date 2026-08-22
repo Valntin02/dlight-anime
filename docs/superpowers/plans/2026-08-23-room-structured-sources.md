@@ -15,6 +15,8 @@
 **Files:**
 - Modify: `app/src/main/java/com/dlight/data/local/PlayRecord.java`
 - Modify: `app/src/main/java/com/dlight/data/local/MyStarRecord.java`
+- Create: `app/src/main/java/com/dlight/network/ApiGsonFactory.java`
+- Modify: `app/src/main/java/com/dlight/data/remote/RetrofitClient.java`
 - Create: `app/src/test/java/com/dlight/data/local/RecordVodDataMappingTest.java`
 
 - [ ] **Step 1: Write failing entity mapping tests**
@@ -50,9 +52,13 @@ public VodData toVodData() {
 
 Do not throw for old or malformed persisted JSON.
 
+The new field is local persistence only. `ApiGsonFactory` must configure matching serialization and deserialization exclusion strategies for `vod_play_data` declared by `PlayRecord` and `MyStarRecord`, and `RetrofitClient` must use that Gson instance. Tests must prove sync JSON omits the field and backend array/object/string values under that key are ignored without changing other fields.
+
 - [ ] **Step 3: Run focused/full tests and commit**
 
-Commit message: `feat: persist structured playback sources`.
+Do not treat this task as independently releasable until Task 2 migration is present; the entity and migration changes are one atomic delivery even if review commits remain separate.
+
+Commit message: `fix: keep structured sources local to Room`.
 
 ### Task 2: Add explicit Room migration 1 to 2
 
