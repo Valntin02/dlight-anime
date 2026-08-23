@@ -64,7 +64,6 @@ public class DanmakuVideoPlayer extends StandardGSYVideoPlayer {
 
     private VodData videoData;
     private ArrayList<String> videourls = new ArrayList<>();
-    private Context hostContext;
     private int currentEpisode = 1;
 
     public DanmakuVideoPlayer(Context context) {
@@ -121,15 +120,6 @@ public class DanmakuVideoPlayer extends StandardGSYVideoPlayer {
 
     public ArrayList<String> getVideourls() {
         return videourls;
-    }
-
-    public void setContext(Context context) {
-        this.hostContext = context;
-    }
-
-    @Nullable
-    public Context getHostContext() {
-        return hostContext;
     }
 
     public int getCurrentEpisode() {

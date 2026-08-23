@@ -144,7 +144,6 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         binding.danmakuPlayer.setVideoData(videoData);
         binding.danmakuPlayer.setVideourls(videourls);
         binding.danmakuPlayer.setCurrentEpisode(safeEpisode);
-        binding.danmakuPlayer.setContext(this);  // 设置 Context
         binding.danmakuPlayer.setShrinkImageRes(R.drawable.custom_shrink);
         binding.danmakuPlayer.setEnlargeImageRes(R.drawable.custom_enlarge);
 
@@ -286,12 +285,11 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             activeRecoveryCall.cancel();
             activeRecoveryCall = null;
         }
-        if (isPlay) {
-            getCurPlay().release();
-        }
-        //GSYPreViewManager.instance().releaseMediaPlayer();
-        if (orientationUtils != null)
+        getCurPlay().setVideoAllCallBack(null);
+        GSYVideoManager.releaseAllVideos();
+        if (orientationUtils != null) {
             orientationUtils.releaseListener();
+        }
         super.onDestroy();
     }
 
