@@ -76,8 +76,8 @@ public class DanmkuVideoActivity extends AppCompatActivity {
     private ArrayList<String> videourls;
 
     private int currentEpisode;
-    private boolean recoveredOnce;
-    private retrofit2.Call<VodResModel> recoveryCall;
+    private PlayerRecoveryTracker recoveryTracker;
+    private retrofit2.Call<VodResModel> activeRecoveryCall;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -113,7 +113,10 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         //获取视频数据
         videoData = getIntent().getParcelableExtra("video_data");
         currentEpisode=getIntent().getIntExtra("currentEpisode",1);
-        recoveredOnce = getIntent().getBooleanExtra("recovered_once", false);
+        recoveryTracker = new PlayerRecoveryTracker(
+            getIntent().getBooleanExtra("recovered_once", false)
+        );
+        binding.playerLoadState.setOnRetryListener(v -> attemptRecoverPlayableSource(true));
         if (videoData == null) {
             Toast.makeText(this, "视频数据为空", Toast.LENGTH_SHORT).show();
             finish();
@@ -121,7 +124,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         }
         dealVideourls();
         if (videourls == null || videourls.isEmpty()) {
-            attemptRecoverPlayableSource();
+            attemptRecoverPlayableSource(false);
             return;
         }
 
@@ -129,8 +132,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         currentEpisode = safeEpisode;
         String playUrl = videourls.get(safeEpisode - 1);
         if (!PlaySourceSelector.isPlayableUrl(playUrl)) {
-            Toast.makeText(this, "当前视频播放地址无效", Toast.LENGTH_SHORT).show();
-            finish();
+            attemptRecoverPlayableSource(false);
             return;
         }
 
@@ -190,6 +192,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             @Override
             public void onPrepared(String url, Object... objects) {
                 super.onPrepared(url, objects);
+                binding.playerLoadState.hide();
                 //开始播放了才能旋转和全屏
                 orientationUtils.setEnable(binding.danmakuPlayer.isRotateWithSystem());
                 isPlay = true;
@@ -205,6 +208,11 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             @Override
             public void onClickStartError(String url, Object... objects) {
                 super.onClickStartError(url, objects);
+                binding.playerLoadState.setOnRetryListener(v -> {
+                    binding.playerLoadState.hide();
+                    getCurPlay().startPlayLogic();
+                });
+                binding.playerLoadState.showError(getString(R.string.player_start_error));
             }
 
             @Override
@@ -265,9 +273,12 @@ public class DanmkuVideoActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         isDestory = true;
-        if (recoveryCall != null) {
-            recoveryCall.cancel();
-            recoveryCall = null;
+        if (recoveryTracker != null) {
+            recoveryTracker.destroy();
+        }
+        if (activeRecoveryCall != null) {
+            activeRecoveryCall.cancel();
+            activeRecoveryCall = null;
         }
         if (isPlay) {
             getCurPlay().release();
@@ -405,29 +416,43 @@ private void getDanmu() {
         return this.currentEpisode;
     }
 
-    private void attemptRecoverPlayableSource() {
-        if (recoveredOnce || videoData == null || TextUtils.isEmpty(videoData.getVod_name())) {
-            Toast.makeText(this, "当前视频暂无可播放地址", Toast.LENGTH_SHORT).show();
-            finish();
+    private void attemptRecoverPlayableSource(boolean userInitiated) {
+        if (videoData == null || TextUtils.isEmpty(videoData.getVod_name())) {
+            showSourceRecoveryError();
             return;
         }
 
+        long generation = userInitiated
+            ? recoveryTracker.beginUserRecovery()
+            : recoveryTracker.beginAutomaticRecovery();
+        if (generation == PlayerRecoveryTracker.NO_GENERATION) {
+            showSourceRecoveryError();
+            return;
+        }
+
+        if (activeRecoveryCall != null) {
+            activeRecoveryCall.cancel();
+        }
+        binding.playerLoadState.showLoading(getString(R.string.player_source_loading));
+        binding.playerLoadState.setOnRetryListener(v -> attemptRecoverPlayableSource(true));
+
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
-        recoveryCall = apiService.requestRearchVodData(videoData.getVod_name());
-        ApiClient.requestData(recoveryCall, new ApiClient.ApiResponseCallback<VodResModel>() {
+        retrofit2.Call<VodResModel> call = apiService.requestRearchVodData(videoData.getVod_name());
+        activeRecoveryCall = call;
+        ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodResModel>() {
             @Override
             public void onSuccess(VodResModel data) {
-                if (isDestory || isFinishing() || isDestroyed()) {
+                if (!isCurrentRecovery(generation, call)) {
                     return;
                 }
-                recoveryCall = null;
+                recoveryTracker.complete(generation);
+                activeRecoveryCall = null;
                 VodData matched = VodRecoveryMatcher.findBest(
                     videoData,
                     data == null ? null : data.getData()
                 );
                 if (matched == null) {
-                    Toast.makeText(DanmkuVideoActivity.this, "当前视频暂无可播放地址", Toast.LENGTH_SHORT).show();
-                    finish();
+                    showSourceRecoveryError();
                     return;
                 }
                 Intent retryIntent = new Intent(DanmkuVideoActivity.this, DanmkuVideoActivity.class);
@@ -440,15 +465,31 @@ private void getDanmu() {
 
             @Override
             public void onFailure(String error) {
-                if (isDestory || isFinishing() || isDestroyed()) {
+                if (!isCurrentRecovery(generation, call)) {
                     return;
                 }
-                recoveryCall = null;
+                recoveryTracker.complete(generation);
+                activeRecoveryCall = null;
                 Log.e("DanmkuVideoActivity", "recover playable source failed: " + error);
-                Toast.makeText(DanmkuVideoActivity.this, "当前视频暂无可播放地址", Toast.LENGTH_SHORT).show();
-                finish();
+                showSourceRecoveryError();
             }
         });
+    }
+
+    private boolean isCurrentRecovery(
+        long generation,
+        retrofit2.Call<VodResModel> call
+    ) {
+        return recoveryTracker.isCurrent(generation)
+            && activeRecoveryCall == call
+            && !isDestory
+            && !isFinishing()
+            && !isDestroyed();
+    }
+
+    private void showSourceRecoveryError() {
+        binding.playerLoadState.setOnRetryListener(v -> attemptRecoverPlayableSource(true));
+        binding.playerLoadState.showError(getString(R.string.player_source_error));
     }
 
     private void savePlayRecordIfNeeded(int episodeIndex) {

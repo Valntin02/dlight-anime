@@ -11,4 +11,7 @@
     <string name="load_state_retry">重试</string>
     <string name="anime_pagination_error">加载更多失败</string>
     <string name="anime_pagination_retry">重试</string>
+    <string name="player_source_loading">正在查找可播放地址…</string>
+    <string name="player_source_error">暂无可播放地址，请重试</string>
+    <string name="player_start_error">播放失败，请重试</string>
 </resources>

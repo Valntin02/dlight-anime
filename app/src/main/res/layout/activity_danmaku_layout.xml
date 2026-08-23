@@ -15,6 +15,17 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHeight_percent="0.34" />
 
+    <com.dlight.ui.widget.LoadStateView
+        android:id="@+id/player_load_state"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/dark_bg"
+        android:elevation="8dp"
+        app:layout_constraintTop_toTopOf="@id/danmaku_player"
+        app:layout_constraintStart_toStartOf="@id/danmaku_player"
+        app:layout_constraintEnd_toEndOf="@id/danmaku_player"
+        app:layout_constraintBottom_toBottomOf="@id/danmaku_player" />
+
     <LinearLayout
         android:id="@+id/viewpager_container"
         android:layout_width="0dp"
