@@ -10,6 +10,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -118,6 +119,27 @@ public class ActvityDownVideo extends AppCompatActivity {
             Toast.makeText(this, "旧缓存没有可重试的下载地址", Toast.LENGTH_SHORT).show();
             return;
         }
+        DownloadPreflight.Result result = DownloadPreflight.check(this);
+        if (result == DownloadPreflight.Result.READY) {
+            startTaskUnchecked(task);
+        } else if (result == DownloadPreflight.Result.CONFIRM_CELLULAR) {
+            new AlertDialog.Builder(this)
+                .setTitle(R.string.download_cellular_title)
+                .setMessage(R.string.download_cellular_message)
+                .setPositiveButton(R.string.download_cellular_continue,
+                    (dialog, which) -> startTaskUnchecked(task))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+        } else if (result == DownloadPreflight.Result.OFFLINE) {
+            Toast.makeText(this, R.string.download_preflight_offline, Toast.LENGTH_SHORT).show();
+        } else if (result == DownloadPreflight.Result.LOW_STORAGE) {
+            Toast.makeText(this, R.string.download_preflight_low_storage, Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(this, R.string.download_preflight_error, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void startTaskUnchecked(DownloadTask task) {
         Intent intent = new Intent(this, ServiceDownload.class);
         intent.setAction(ServiceDownload.ACTION_START);
         intent.putExtra(DownloadContract.EXTRA_TASK_ID, task.getTaskId());

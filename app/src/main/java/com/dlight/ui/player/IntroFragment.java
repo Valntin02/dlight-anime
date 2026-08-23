@@ -24,6 +24,7 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
@@ -42,6 +43,7 @@ import com.dlight.data.local.MyStarRecord;
 import com.dlight.data.local.MyStarRecordDao;
 import com.dlight.data.local.PlayRecord;
 import com.dlight.data.local.PlayRecordDao;
+import com.dlight.feature.download.DownloadPreflight;
 import com.dlight.feature.download.ServiceDownload;
 import com.dlight.feature.download.DownloadContract;
 import com.dlight.feature.download.DownloadTask;
@@ -178,13 +180,40 @@ public class IntroFragment extends Fragment {
             intent.putExtra(DownloadContract.EXTRA_FILE_NAME,
                 videoData.getVod_name() + "—第" + episode + "集");
             intent.putExtra(DownloadContract.EXTRA_PIC_URL, videoData.getVod_pic());
-            ContextCompat.startForegroundService(requireContext(), intent);
-            btnDownLoader.setEnabled(false);
-            btnDownLoader.setText("等待中");
-            Log.d("bingBtnDownLoader", "开始下载任务: " + taskId);
-
+            startDownload(intent, taskId);
         });
 
+    }
+
+    private void startDownload(Intent intent, String taskId) {
+        DownloadPreflight.Result result = DownloadPreflight.check(requireContext());
+        if (result == DownloadPreflight.Result.READY) {
+            startDownloadUnchecked(intent, taskId);
+        } else if (result == DownloadPreflight.Result.CONFIRM_CELLULAR) {
+            new AlertDialog.Builder(requireContext())
+                .setTitle(R.string.download_cellular_title)
+                .setMessage(R.string.download_cellular_message)
+                .setPositiveButton(R.string.download_cellular_continue,
+                    (dialog, which) -> startDownloadUnchecked(intent, taskId))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+        } else if (result == DownloadPreflight.Result.OFFLINE) {
+            Toast.makeText(requireContext(), R.string.download_preflight_offline,
+                Toast.LENGTH_SHORT).show();
+        } else if (result == DownloadPreflight.Result.LOW_STORAGE) {
+            Toast.makeText(requireContext(), R.string.download_preflight_low_storage,
+                Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(requireContext(), R.string.download_preflight_error,
+                Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void startDownloadUnchecked(Intent intent, String taskId) {
+        ContextCompat.startForegroundService(requireContext(), intent);
+        btnDownLoader.setEnabled(false);
+        btnDownLoader.setText("等待中");
+        Log.d("bingBtnDownLoader", "开始下载任务: " + taskId);
     }
 
     private String getCurrentTaskId() {
