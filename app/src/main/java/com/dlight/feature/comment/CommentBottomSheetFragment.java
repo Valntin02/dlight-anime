@@ -1,5 +1,6 @@
 package com.dlight.feature.comment;
 
+import android.app.Dialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -7,6 +8,8 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -14,6 +17,11 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.dlight.R;
 import com.dlight.data.model.JsonResModel;
@@ -24,9 +32,9 @@ import com.dlight.data.remote.RetrofitClient;
 import com.dlight.data.model.VodData;
 import com.dlight.feature.user.UserResModel;
 import com.dlight.util.Param;
+import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -43,6 +51,7 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment  imple
     private UserResModel userInfo;
     private ImageView sendButton;
     private EditText commentEditText;
+    private View rootView;
     private CommentData currentReplyComment;  // 临时存储当前正在回复的评论
     private Map<Integer, String> userAvatarMap=new HashMap<>();
 
@@ -62,6 +71,25 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment  imple
                              @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
         View view = inflater.inflate(R.layout.fragment_comment_bottom_sheet, container, false);
+        rootView = view;
+
+        int initialPaddingLeft = view.getPaddingLeft();
+        int initialPaddingTop = view.getPaddingTop();
+        int initialPaddingRight = view.getPaddingRight();
+        int initialPaddingBottom = view.getPaddingBottom();
+        ViewCompat.setOnApplyWindowInsetsListener(view, (target, windowInsets) -> {
+            Insets insets = windowInsets.getInsets(
+                WindowInsetsCompat.Type.ime() | WindowInsetsCompat.Type.systemBars()
+            );
+            target.setPadding(
+                initialPaddingLeft,
+                initialPaddingTop,
+                initialPaddingRight,
+                initialPaddingBottom + insets.bottom
+            );
+            return windowInsets;
+        });
+        ViewCompat.requestApplyInsets(view);
 
         View inputLayout = view.findViewById(R.id.comment_input_layout);
 
@@ -149,6 +177,42 @@ public class CommentBottomSheetFragment extends BottomSheetDialogFragment  imple
         });
 
         return view;
+    }
+
+    @Override
+    public void onStart() {
+        super.onStart();
+
+        Dialog dialog = getDialog();
+        if (dialog == null) {
+            return;
+        }
+
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+        }
+
+        View bottomSheet = dialog.findViewById(com.google.android.material.R.id.design_bottom_sheet);
+        if (bottomSheet != null) {
+            BottomSheetBehavior.from(bottomSheet).setState(BottomSheetBehavior.STATE_EXPANDED);
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (rootView != null) {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView, null);
+        }
+        if (recyclerView != null) {
+            recyclerView.setAdapter(null);
+        }
+        rootView = null;
+        recyclerView = null;
+        commentAdapter = null;
+        sendButton = null;
+        commentEditText = null;
+        super.onDestroyView();
     }
 
     private void replyComment(CommentData commentData, CommentFragment.CommentCallback callback) {
