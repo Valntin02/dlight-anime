@@ -53,7 +53,7 @@ Run Debug/Release tests, app lint/build. Commit: `feat: show download speed and 
 
 - [ ] **Step 1: Test network/storage decisions**
 
-Classify offline, Wi-Fi, cellular, and other validated internet. Require at least 256 MiB free reserve in the internal video directory. Unknown capabilities fail closed as offline; storage API/runtime failure returns a visible preflight error, not a crash.
+Classify offline and validated internet, and use `ConnectivityManager.isActiveNetworkMetered()` so cellular or VPN-over-cellular networks require confirmation while unmetered validated networks are ready. Require at least 256 MiB free reserve in the internal video directory. Unknown capabilities fail closed as offline; storage API/runtime failure returns a visible preflight error, not a crash.
 
 - [ ] **Step 2: Add one preflight API**
 
@@ -61,7 +61,7 @@ Return a result enum/value object: `READY`, `CONFIRM_CELLULAR`, `OFFLINE`, `LOW_
 
 - [ ] **Step 3: Gate new and resumed downloads**
 
-Before `startForegroundService`, run preflight. READY starts. CELLULAR shows a resource-backed confirmation dialog and starts only on positive action. OFFLINE/LOW_STORAGE/ERROR show actionable messages. Apply to detail-page new downloads and download-list resume/retry. Pause/play/delete are unaffected.
+Before `startForegroundService`, run preflight. READY starts. Metered network shows one lifecycle-owned, resource-backed confirmation dialog. Positive action reruns network and storage checks with metered consent before starting; disconnects or low storage during the dialog still block. Dismiss dialogs on Fragment view/Activity destruction and prevent duplicates. OFFLINE/LOW_STORAGE/ERROR show actionable messages. Apply to detail-page new downloads and download-list resume/retry. Pause/play/delete are unaffected.
 
 - [ ] **Step 4: Verify and commit**
 
