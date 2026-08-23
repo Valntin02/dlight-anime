@@ -35,9 +35,10 @@
 
 **Files:**
 - Modify: `app/src/main/res/layout/fragment_comment_bottom_sheet.xml`
+- Modify: `app/src/main/java/com/dlight/feature/comment/CommentBottomSheetFragment.java`
 - Modify: `app/build.gradle`
 
-- [ ] Add complete start/end/top/bottom constraints for title, recycler, and included input layout while preserving the existing 500dp recycler intent.
+- [ ] Add complete start/end/top/bottom constraints for title, recycler, and included input layout. Use a match-parent root and a 0dp recycler between title/input so it shrinks in short or split-screen windows. Configure BottomSheet `ADJUST_RESIZE` and apply IME/system-bar bottom insets so the input remains visible above the keyboard.
 - [ ] Replace deprecated `lintOptions { abortOnError false }` with `lint { abortOnError true }`.
 - [ ] Run `:app:lintDebug` and `:app:lintRelease`; both must succeed with zero lint errors in their reports. Warnings may remain.
 - [ ] Run Debug/Release tests and builds.
