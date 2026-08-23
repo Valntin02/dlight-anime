@@ -1,6 +1,7 @@
 package com.dlight;
 
 import android.content.Context;
+import android.os.HandlerThread;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -12,6 +13,7 @@ import androidx.multidex.MultiDexApplication;
 
 import com.dlight.feature.download.DownloadTaskStore;
 import com.dlight.network.exosource.DlightExoHttpDataSourceFactory;
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 
 import java.io.File;
 import java.util.Map;
@@ -28,6 +30,7 @@ import com.shuyu.gsyvideoplayer.player.PlayerFactory;
 public class DlightApplication extends MultiDexApplication {
     private static final String TAG = "DlightApp";
     private static Context context;
+    private HandlerThread playerMediaThread;
 
     @Override
     public void onCreate() {
@@ -58,7 +61,9 @@ public class DlightApplication extends MultiDexApplication {
         // 使用IJK播放器
         PlayerFactory.setPlayManager(IjkPlayerManager.class);
 
-        // 代理缓存模式配置已移除，使用默认配置
+        playerMediaThread = new HandlerThread("dlight-gsy-media");
+        playerMediaThread.start();
+        GSYVideoManager.instance().setLooper(playerMediaThread.getLooper());
 
         Log.d(TAG, "Player config initialized");
     }

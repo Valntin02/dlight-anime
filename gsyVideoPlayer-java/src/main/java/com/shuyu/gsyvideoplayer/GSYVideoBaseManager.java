@@ -56,6 +56,8 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
 
     protected MediaHandler mMediaHandler;
 
+    protected Looper mLooper;
+
     protected Handler mainThreadHandler;
 
     protected WeakReference<GSYMediaPlayerListener> listener;
@@ -148,8 +150,12 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
     }
 
     protected void init() {
-        mMediaHandler = new MediaHandler((Looper.getMainLooper()));
-        mainThreadHandler = new Handler();
+        initMediaHandler();
+        mainThreadHandler = new Handler(Looper.getMainLooper());
+    }
+
+    protected void initMediaHandler() {
+        mMediaHandler = new MediaHandler(mLooper == null ? Looper.getMainLooper() : mLooper);
     }
 
     protected IPlayerManager getPlayManager() {
@@ -775,5 +781,17 @@ public abstract class GSYVideoBaseManager implements IMediaPlayer.OnPreparedList
      */
     public void setPlayerInitSuccessListener(IPlayerInitSuccessListener listener) {
         this.mPlayerInitSuccessListener = listener;
+    }
+
+    public Looper getLooper() {
+        return mLooper;
+    }
+
+    /** Configure before the first prepare or release command. */
+    public void setLooper(Looper looper) {
+        mLooper = looper;
+        if (mMediaHandler != null) {
+            initMediaHandler();
+        }
     }
 }
