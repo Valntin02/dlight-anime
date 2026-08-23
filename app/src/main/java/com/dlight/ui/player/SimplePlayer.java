@@ -95,10 +95,12 @@ public class SimplePlayer extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        super.onDestroy();
-        GSYVideoManager.releaseAllVideos();
-        if (orientationUtils != null)
+        videoPlayer.setVideoAllCallBack(null);
+        videoPlayer.release();
+        if (orientationUtils != null) {
             orientationUtils.releaseListener();
+        }
+        super.onDestroy();
     }
 
     @Override

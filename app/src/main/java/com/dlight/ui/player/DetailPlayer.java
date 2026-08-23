@@ -513,7 +513,7 @@ public class DetailPlayer extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         getCurPlay().setVideoAllCallBack(null);
-        GSYVideoManager.releaseAllVideos();
+        getCurPlay().release();
         if (orientationUtils != null) {
             orientationUtils.releaseListener();
         }

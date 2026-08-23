@@ -141,7 +141,7 @@ public class PlayTVActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         binding.videoPlayerTv.setVideoAllCallBack(null);
-        GSYVideoManager.releaseAllVideos();
+        binding.videoPlayerTv.release();
         if (orientationUtils != null) {
             orientationUtils.releaseListener();
         }

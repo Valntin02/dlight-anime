@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ensure every GSY playback Activity abandons audio focus and releases the shared player when destroyed, including destruction before `onPrepared()`.
+**Goal:** Ensure every GSY playback Activity abandons its own audio focus when destroyed, including destruction before `onPrepared()`, without allowing an older Activity to release a newer player.
 
-**Architecture:** Keep audio-focus ownership in the existing GSY player and fix the Activity lifecycle boundary that currently skips teardown. Add a Robolectric integration test against Android's actual `AudioManager` listener map, then make all declared playback Activities follow the same unconditional `GSYVideoManager.releaseAllVideos()` contract. LeakCanary remains enabled and unchanged.
+**Architecture:** Keep audio-focus ownership in the existing GSY player and fix the Activity lifecycle boundary that currently skips teardown. Add Robolectric integration tests against audio-focus request/abandon events, then make all declared playback Activities unconditionally call their local player `release()`; its existing `isCurrentMediaListener()` guard preserves newer-owner focus. LeakCanary remains enabled and unchanged.
 
 **Tech Stack:** Java, Android lifecycle, GSYVideoPlayer, AudioManager, Robolectric 4.13, JUnit 4, Gradle 8.7 / AGP 8.6.1.
 
@@ -181,7 +181,7 @@ protected void onDestroy() {
         activeRecoveryCall = null;
     }
     getCurPlay().setVideoAllCallBack(null);
-    GSYVideoManager.releaseAllVideos();
+    getCurPlay().release();
     if (orientationUtils != null) {
         orientationUtils.releaseListener();
     }
@@ -214,6 +214,7 @@ git commit -m "fix: release player focus during early teardown"
 - Modify: `app/src/main/java/com/dlight/ui/player/DetailPlayer.java:513-521`
 - Modify: `app/src/main/java/com/dlight/ui/player/PlayActivity.java:140-146`
 - Modify: `app/src/main/java/com/dlight/ui/player/PlayTVActivity.java:140-146`
+- Modify: `app/src/main/java/com/dlight/ui/player/SimplePlayer.java:96-102`
 - Modify: `app/src/test/java/com/dlight/ui/player/PlayerActivityLifecycleTest.java`
 
 - [ ] **Step 1: Add sibling lifecycle tests**
@@ -298,7 +299,7 @@ Use this exact teardown shape in `DetailPlayer`, selecting `getCurPlay()`:
 @Override
 protected void onDestroy() {
     getCurPlay().setVideoAllCallBack(null);
-    GSYVideoManager.releaseAllVideos();
+    getCurPlay().release();
     if (orientationUtils != null) {
         orientationUtils.releaseListener();
     }
@@ -313,7 +314,7 @@ Use this shape in `PlayActivity`, selecting `binding.videoPlayer`:
 @Override
 protected void onDestroy() {
     binding.videoPlayer.setVideoAllCallBack(null);
-    GSYVideoManager.releaseAllVideos();
+    binding.videoPlayer.release();
     if (orientationUtils != null) {
         orientationUtils.releaseListener();
     }
@@ -328,7 +329,21 @@ Use this shape in `PlayTVActivity`, selecting `binding.videoPlayerTv`:
 @Override
 protected void onDestroy() {
     binding.videoPlayerTv.setVideoAllCallBack(null);
-    GSYVideoManager.releaseAllVideos();
+    binding.videoPlayerTv.release();
+    if (orientationUtils != null) {
+        orientationUtils.releaseListener();
+    }
+    super.onDestroy();
+}
+```
+
+Use this shape in `SimplePlayer`, selecting `videoPlayer`:
+
+```java
+@Override
+protected void onDestroy() {
+    videoPlayer.setVideoAllCallBack(null);
+    videoPlayer.release();
     if (orientationUtils != null) {
         orientationUtils.releaseListener();
     }
@@ -458,7 +473,7 @@ Check:
 
 - confirmed pre-prepared leak test is red before and green after;
 - all four affected Activities release unconditionally;
-- `SimplePlayer` remains unchanged;
+- `SimplePlayer` uses the same owner-aware local release;
 - `hostContext` is removed;
 - LeakCanary remains enabled and visible;
 - automated matrix passes;

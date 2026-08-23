@@ -2,6 +2,7 @@ package com.dlight.ui.player;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.robolectric.Shadows.shadowOf;
@@ -197,6 +198,57 @@ public class PlayerActivityLifecycleTest {
         assertFocusAbandoned(controller.get(), focusRequest);
     }
 
+    @Test
+    public void simplePlayerDestroy_abandonsAudioFocus() throws Exception {
+        Context app = RuntimeEnvironment.getApplication();
+        Intent intent = new Intent(app, SimplePlayer.class)
+            .putExtra("video_path", "android.resource://com.dlight/raw/test")
+            .putExtra("video_name", "Lifecycle regression");
+        ActivityController<SimplePlayer> controller = Robolectric
+            .buildActivity(SimplePlayer.class, intent)
+            .create()
+            .start()
+            .resume();
+        activeController = controller;
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
+
+        controller.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    @Test
+    public void destroyingPreviousActivity_doesNotReleaseNewPlayerFocus() throws Exception {
+        ActivityController<DanmkuVideoActivity> previous = createDanmakuActivity(false);
+        DanmakuVideoPlayer previousPlayer = previous.get().findViewById(R.id.danmaku_player);
+        previousPlayer.startPlayLogic();
+        ShadowAudioManager.AudioFocusRequest previousFocus = lastFocusRequest(previous.get());
+
+        ActivityController<DanmkuVideoActivity> current = createDanmakuActivity(false);
+        DanmakuVideoPlayer currentPlayer = current.get().findViewById(R.id.danmaku_player);
+        currentPlayer.startPlayLogic();
+        ShadowAudioManager.AudioFocusRequest currentFocus = lastFocusRequest(current.get());
+
+        assertFocusAbandoned(current.get(), previousFocus);
+        assertNotSame(
+            currentFocus.listener,
+            lastAbandonedFocusListener(current.get())
+        );
+
+        previous.pause().stop().destroy();
+
+        assertNotSame(
+            currentFocus.listener,
+            lastAbandonedFocusListener(current.get())
+        );
+
+        current.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(current.get(), currentFocus);
+    }
+
     private static ShadowAudioManager.AudioFocusRequest lastFocusRequest(Context context) {
         AudioManager audioManager = (AudioManager) context.getApplicationContext()
             .getSystemService(Context.AUDIO_SERVICE);
@@ -208,6 +260,10 @@ public class PlayerActivityLifecycleTest {
     }
 
     private ActivityController<DanmkuVideoActivity> createDanmakuActivity() {
+        return createDanmakuActivity(true);
+    }
+
+    private ActivityController<DanmkuVideoActivity> createDanmakuActivity(boolean visible) {
         Context app = RuntimeEnvironment.getApplication();
         VodData video = new VodData(
             2,
@@ -227,8 +283,10 @@ public class PlayerActivityLifecycleTest {
             .buildActivity(DanmkuVideoActivity.class, intent)
             .create()
             .start()
-            .resume()
-            .visible();
+            .resume();
+        if (visible) {
+            controller.visible();
+        }
         activeController = controller;
         return controller;
     }
@@ -243,5 +301,13 @@ public class PlayerActivityLifecycleTest {
             focusRequest.listener,
             shadowOf(audioManager).getLastAbandonedAudioFocusListener()
         );
+    }
+
+    private static AudioManager.OnAudioFocusChangeListener lastAbandonedFocusListener(
+        Context context
+    ) {
+        AudioManager audioManager = (AudioManager) context.getApplicationContext()
+            .getSystemService(Context.AUDIO_SERVICE);
+        return shadowOf(audioManager).getLastAbandonedAudioFocusListener();
     }
 }

@@ -141,7 +141,7 @@ public class PlayActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         binding.videoPlayer.setVideoAllCallBack(null);
-        GSYVideoManager.releaseAllVideos();
+        binding.videoPlayer.release();
         if (orientationUtils != null) {
             orientationUtils.releaseListener();
         }

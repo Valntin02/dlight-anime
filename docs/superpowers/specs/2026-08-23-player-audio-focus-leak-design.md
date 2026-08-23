@@ -35,7 +35,7 @@ For every affected playback Activity:
 
 1. Stop relying on `isPlay` to decide whether cleanup is needed.
 2. Clear the current player's callback before teardown so completion cannot call back into a dying Activity.
-3. Call `GSYVideoManager.releaseAllVideos()` before `super.onDestroy()` so the current listener receives `onCompletion()`, abandons audio focus, releases the media player, and releases Danmaku resources while the Activity window is still valid.
+3. Call the page's current player `release()` before `super.onDestroy()`. `GSYVideoView.release()` checks `isCurrentMediaListener()` before delegating to the shared manager, so a late old-Activity destroy cannot stop a newer player. When the page still owns the manager, its listener receives `onCompletion()`, abandons audio focus, releases the media player, and releases Danmaku resources while the Activity window is still valid.
 4. Release orientation listeners on every path.
 
 Apply this to:
@@ -44,8 +44,9 @@ Apply this to:
 - `DetailPlayer`
 - `PlayActivity`
 - `PlayTVActivity`
+- `SimplePlayer`
 
-Keep `SimplePlayer` behavior unchanged because it already releases the shared manager from `onDestroy()`.
+Change `SimplePlayer` from unconditional global-manager release to the same owner-aware local release. It already covered early teardown, but its global call could otherwise release a newer owner if destruction arrived late.
 
 Remove `DanmakuVideoPlayer.hostContext`, its setter/getter, and the Activity call site. The field is unused and duplicates the View's existing Activity context, adding another direct Activity reference without providing behavior.
 
@@ -53,7 +54,7 @@ Do not release from `View#onDetachedFromWindow()`: the normal/fullscreen handoff
 
 ## Error and concurrency behavior
 
-Cleanup is idempotent at the Activity level. If the back-button path released the manager first, the later `onDestroy()` call sees no current listener and only asks the already-released manager to release again. If another player has already replaced the current listener, GSY's single-manager ownership model makes that transition responsible for completing the previous listener before registering the new one.
+Cleanup is idempotent at the Activity level. If the back-button path released the manager first, the later local `release()` sees that the page is no longer the current media listener and safely skips. If another player has already replaced the current listener, the old Activity's local `release()` also skips and cannot stop the new owner; GSY's handoff completes the old listener before registering the new one.
 
 The release path must cover all player states: normal, preparing, playing, paused, error, completed, and fullscreen.
 

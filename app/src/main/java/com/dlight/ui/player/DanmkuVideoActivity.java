@@ -286,7 +286,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             activeRecoveryCall = null;
         }
         getCurPlay().setVideoAllCallBack(null);
-        GSYVideoManager.releaseAllVideos();
+        getCurPlay().release();
         if (orientationUtils != null) {
             orientationUtils.releaseListener();
         }
