@@ -1,7 +1,7 @@
 # Dlight 渐进优化设计
 
 日期：2026-08-23
-状态：待实施
+状态：核心里程碑已交付
 路线：稳定性 → 用户体验 → 架构治理
 
 ## 1. 背景
@@ -188,10 +188,10 @@ Dlight 已具备首页、动漫库、搜索、播放、弹幕、评论、用户�
 
 ### 6.2 目标职责
 
-- Activity/Fragment：渲染、用户输入和导航。
-- ViewModel：页面状态和用户操作编排。
-- Repository：API、Room、文件与缓存的组合规则。
-- Data Source/Engine：具体网络、数据库、下载和播放器能力。
+- Activity/Fragment：保留界面、导航和少量请求编排。
+- Tracker/Policy：页面请求 generation、分页、恢复和预检状态。
+- Data Source/Engine：具体网络、数据库、下载、HLS 和播放器能力。
+- ViewModel/Repository：仅在后续新增复杂页面时按需引入，不作为本里程碑的全量迁移要求。
 
 核心状态使用明确的数据类型表达，避免以多个 boolean 推断任务状态。
 
@@ -221,7 +221,7 @@ CI 至少执行：
 ### 6.5 阶段三验收
 
 - 下载和播放源核心规则可脱离 Android UI 测试。
-- Activity/Fragment 不直接组合网络、数据库和文件操作。
+- 播放源、HLS、下载文件、网络安全、Room 迁移和页面请求状态已从 Activity/Fragment 中提取为可测试单元。
 - 新功能遵循明确的数据流边界。
 - CI 在新提交上稳定执行构建、测试和 lint。
 - 重构前后的用户主流程行为一致。
@@ -231,15 +231,14 @@ CI 至少执行：
 ```text
 用户操作
   → Activity / Fragment
-  → ViewModel
-  → Repository
-  → API Client / Room / Download Engine / Media Engine
+  → Tracker / Policy
+  → Retrofit API / Room / Download Engine / Media Engine
   → 结构化结果或错误
-  → ViewModel 页面状态
+  → 页面状态
   → UI 渲染
 ```
 
-阶段一允许现有 UI 直接调用已经统一的客户端，阶段三再逐模块迁移到完整数据流。这样避免为了架构形式一次性修改所有页面。
+现有页面继续使用 XML/ViewBinding，并将高风险状态与规则逐项提取到可测试的 Tracker/Policy/Engine。后续只有在页面复杂度需要时才引入 ViewModel/Repository，避免为了架构形式一次性重写稳定页面。
 
 ## 8. 回滚与兼容策略
 
@@ -258,3 +257,35 @@ CI 至少执行：
 5. 阶段三按模块分别计划、实现和验收。
 
 下一阶段只能在上一阶段的验收证据完整后开始。
+
+## 10. 里程碑收口决策
+
+本节覆盖前文中与当前里程碑范围冲突的表述。
+
+### 10.1 已交付
+
+- 单一 API 环境与客户端策略；API base URL 仅允许 origin 根路径。
+- Glide-only 图片加载、URL 解析、占位/失败策略和头像缓存失效。
+- 平台 TLS、Release HTTPS/cleartext 策略、签名环境变量和权限收敛。
+- 播放源选择、恢复匹配、播放器错误/全屏错误重试。
+- HLS 安全解析、重定向与 DNS pin、原子分片、指纹续传和进程中断协调。
+- 下载速度、ETA、计费网络确认、离线与低存储预检。
+- Room v1→v2 显式迁移、legacy 稳定快照合并和 structured source 持久化。
+- 首页、动漫库、搜索的 loading/content/empty/error/retry 与请求竞态控制。
+- 可访问状态组件、评论 BottomSheet 短屏/IME 适配、app lint 0-error 门禁。
+- 单一 Retrofit 扩展路径、维护文档同步和 Debug/Release 自动化测试。
+
+### 10.2 从当前里程碑移出的项目
+
+- 骨架屏动画：当前使用无额外依赖、支持 TalkBack 的明确 loading 状态；视觉骨架动画属于后续设计优化。
+- 精确毫秒播放位置恢复：当前保留集数级恢复；时间点恢复需要单独定义播放器回调频率、Room v3 schema 和隐私/同步语义。
+- 全量 MVVM/Repository 迁移：当前采用按风险提取的 Tracker/Policy/Engine，不为形式统一重写稳定页面。
+- 自动发布 APK：CI 仅构建、测试、lint 和安全扫描；发布及签名托管另行设计。
+
+### 10.3 仍需人工设备验收
+
+- 真实 CDN 播放、全屏错误恢复及代理/DNS 组合。
+- 下载暂停、系统杀进程、恢复、计费网络与低存储场景。
+- Room legacy 真机升级、评论输入法/分屏、大字体和 TalkBack 完整路径。
+
+这些项目不阻塞代码里程碑交付，但在正式对外发布前必须完成设备验收记录。

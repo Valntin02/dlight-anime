@@ -13,6 +13,7 @@
 
 ```text
 dlight-anime/
+├── .github/workflows/android.yml       Debug/Release 自动质量门禁
 ├── app/                                业务应用、单测、Room schema
 ├── gsyVideoPlayer/                     播放器聚合模块
 ├── gsyVideoPlayer-base/                播放器基础 API
@@ -189,6 +190,7 @@ app/schemas/com.dlight.data.local.AppDatabase/2.json
 - Release API origin 必须显式传入 HTTPS 值，否则 `preReleaseBuild` 失败。
 - Release signing 只读取环境变量：`DLIGHT_RELEASE_STORE_FILE`、`DLIGHT_RELEASE_STORE_PASSWORD`、`DLIGHT_RELEASE_KEY_ALIAS`、`DLIGHT_RELEASE_KEY_PASSWORD`。四项完整时签名；缺失时 Release 保持 unsigned。
 - `app` 使用 `lint { abortOnError true }`；`:app:lintDebug`/`:app:lintRelease` 的错误会阻断构建。
+- `.github/workflows/android.yml` 在 push/PR 执行 Debug/Release 单测、lint、构建及基础敏感信息/过期依赖扫描；不发布或签名 APK。
 
 常用验证命令（使用 Android Studio JBR 与本机 Android SDK）：
 
