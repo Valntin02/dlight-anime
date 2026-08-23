@@ -28,15 +28,15 @@ Inject a `Clock`. Cover zero/unknown, bytes per second, ETA from progress, non-d
 
 - [ ] **Step 2: Add backward-compatible task fields**
 
-Add `bytesDownloaded`, `bytesPerSecond`, and `etaSeconds` as non-negative longs. JSON missing fields default to zero/zero/-1. Old JSON remains readable. Reset metrics when requeueing; completed ETA is zero.
+Add `bytesDownloaded`, `bytesPerSecond`, and `etaSeconds` as non-negative longs. JSON missing fields default to zero/zero/-1. Old JSON remains readable. Reset metrics when requeueing; paused retains bytes but clears stale speed/ETA; completed ETA is zero.
 
 - [ ] **Step 3: Report bytes without changing transfer semantics**
 
-Count actual bytes written in the existing segment copy loop. Add a default callback method for metrics so existing callback implementations remain source-compatible. Emit at most once per second and at segment completion; do not emit after terminal callback.
+Count actual bytes written in the existing segment copy loop. Track per-attempt in-flight bytes separately from total transferred bytes: valid progress/ETA uses completed plus current in-flight bytes, while a failed attempt discards its in-flight contribution without decreasing the persisted transferred byte count. Add a default callback method carrying progress, downloaded bytes, speed, and ETA so existing callback implementations remain source-compatible. Emit at most once per second and at segment completion; do not emit after terminal callback.
 
 - [ ] **Step 4: Persist/service-render metrics**
 
-Service updates task metrics and publishes at the throttled cadence. Adapter uses resource strings and formats IEC/SI-consistent speed plus `mm:ss`/`h:mm:ss` ETA for downloading; paused keeps percentage but not stale speed; failed shows error.
+Service updates task metrics and publishes at the throttled cadence. Adapter uses resource strings and formats IEC/SI-consistent speed plus exact `mm:ss`/`h:mm:ss` ETA for downloading; paused keeps percentage but not stale speed; failed shows error.
 
 - [ ] **Step 5: Verify and commit**
 
