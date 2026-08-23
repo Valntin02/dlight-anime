@@ -140,9 +140,12 @@ public class PlayTVActivity extends AppCompatActivity {
     @TargetApi(Build.VERSION_CODES.KITKAT)
     @Override
     protected void onDestroy() {
-        super.onDestroy();
-        if (orientationUtils != null)
+        binding.videoPlayerTv.setVideoAllCallBack(null);
+        GSYVideoManager.releaseAllVideos();
+        if (orientationUtils != null) {
             orientationUtils.releaseListener();
+        }
+        super.onDestroy();
     }
 
     @Override

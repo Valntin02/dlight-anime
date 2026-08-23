@@ -11,6 +11,7 @@ import android.media.AudioManager;
 import com.dlight.R;
 import com.dlight.data.model.VodData;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
+import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import org.junit.After;
 import org.junit.Before;
@@ -72,20 +73,86 @@ public class PlayerActivityLifecycleTest {
 
         player.startPlayLogic();
 
-        AudioManager audioManager = (AudioManager) controller.get().getApplicationContext()
-            .getSystemService(Context.AUDIO_SERVICE);
-        ShadowAudioManager shadowAudioManager = shadowOf(audioManager);
-        ShadowAudioManager.AudioFocusRequest focusRequest =
-            shadowAudioManager.getLastAudioFocusRequest();
-        assertNotNull(focusRequest);
-        assertNotNull(focusRequest.listener);
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
 
         controller.pause().stop().destroy();
         activeController = null;
 
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    @Test
+    public void detailDestroyBeforePrepared_abandonsAudioFocus() throws Exception {
+        ActivityController<DetailPlayer> controller = Robolectric
+            .buildActivity(DetailPlayer.class)
+            .create()
+            .start()
+            .resume()
+            .visible();
+        activeController = controller;
+        GSYVideoPlayer player = controller.get().findViewById(R.id.detail_player);
+
+        player.startPlayLogic();
+
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
+
+        controller.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    @Test
+    public void playActivityDestroy_abandonsAudioFocus() throws Exception {
+        ActivityController<PlayActivity> controller = Robolectric
+            .buildActivity(PlayActivity.class)
+            .create()
+            .start()
+            .resume();
+        activeController = controller;
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
+
+        controller.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    @Test
+    public void playTvActivityDestroy_abandonsAudioFocus() throws Exception {
+        ActivityController<PlayTVActivity> controller = Robolectric
+            .buildActivity(PlayTVActivity.class)
+            .create()
+            .start()
+            .resume();
+        activeController = controller;
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
+
+        controller.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    private static ShadowAudioManager.AudioFocusRequest lastFocusRequest(Context context) {
+        AudioManager audioManager = (AudioManager) context.getApplicationContext()
+            .getSystemService(Context.AUDIO_SERVICE);
+        ShadowAudioManager.AudioFocusRequest focusRequest =
+            shadowOf(audioManager).getLastAudioFocusRequest();
+        assertNotNull(focusRequest);
+        assertNotNull(focusRequest.listener);
+        return focusRequest;
+    }
+
+    private static void assertFocusAbandoned(
+        Context context,
+        ShadowAudioManager.AudioFocusRequest focusRequest
+    ) {
+        AudioManager audioManager = (AudioManager) context.getApplicationContext()
+            .getSystemService(Context.AUDIO_SERVICE);
         assertSame(
             focusRequest.listener,
-            shadowAudioManager.getLastAbandonedAudioFocusListener()
+            shadowOf(audioManager).getLastAbandonedAudioFocusListener()
         );
     }
 }
