@@ -21,7 +21,7 @@
 
 - [ ] **Step 1: Add a player-bounds state overlay**
 
-Add `player_load_state` constrained to the same top/start/end/bottom bounds as `danmaku_player`, with a higher elevation and initial GONE inherited from the view.
+Add `player_load_state` constrained to the same top/start/end/bottom bounds as `danmaku_player`, with a higher elevation and initial GONE inherited from the view. It must be clickable/focusable to consume touches; while visible, hide the underlying player's accessibility descendants and restore them when hidden.
 
 - [ ] **Step 2: Implement and test PlayerRecoveryTracker**
 
@@ -42,7 +42,7 @@ Do not automatically loop when recovered data still has no playable URL; the rec
 
 - [ ] **Step 4: Render player start failure and retry**
 
-In `onClickStartError`, show a resource-backed player error. Retry hides the state and invokes the current player start logic for the same selected URL. `onPrepared` hides the state. Do not refetch metadata for a transport/player decode error unless the user invokes source recovery separately.
+Handle the real first-failure callback `onPlayError` and retain `onClickStartError` as a secondary path. If failure happens in the GSY fullscreen window, exit fullscreen before posting the Activity overlay so the retry UI is visible. Retry hides the state and invokes the current player start logic for the same selected URL. `onPrepared` hides the state. Do not refetch metadata for a transport/player decode error unless the user invokes source recovery separately.
 
 - [ ] **Step 5: Test, lint, build, commit**
 
