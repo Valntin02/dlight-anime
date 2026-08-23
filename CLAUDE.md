@@ -6,8 +6,8 @@
 - 主文档：[doc/PROJECT_STRUCTURE.md](doc/PROJECT_STRUCTURE.md)
   - 顶层目录、`app` 模块各包职责、关键类清单
   - 启动 / 运行流程、已实现功能矩阵
-  - 后端 API 速查（baseUrl 由 `app/.../util/Param.java` 控制）
-  - 注意事项与已知坑（双套网络层、AppDatabase 单例混用、目录嵌套残留等）
+  - 后端 API 速查（baseUrl 由 `NetworkConfig` 读取构建环境配置）
+  - 注意事项与已知坑（AppDatabase 单例混用、目录嵌套残留等）
 
 ## 历史改造背景（按需查阅）
 - `PROJECT_SUMMARY.md`、`MIGRATION_REPORT.md`、`REFACTOR_PLAN.md`
@@ -19,7 +19,7 @@
 
 ## 维护约定
 - 当目录结构、关键模块、后端接口、构建配置发生变化时，请同步更新 `doc/PROJECT_STRUCTURE.md`。
-- 新增业务接口优先放在 `app/src/main/java/com/dlight/network/api/`，并通过 `NetworkManager` 暴露 getter。
+- 新增业务接口统一定义在 `app/src/main/java/com/dlight/data/remote/ApiService.java`。`RetrofitClient` 负责创建唯一 Retrofit 实例，`NetworkConfig` 负责环境 baseUrl，`HttpClientFactory` 负责 OkHttp 客户端；不要新建第二套 Retrofit stack。
 - 构建 Android 使用 Android Studio 自带 JDK（可用 `build-android` skill）。
 
 ## 完工自检（强约束）

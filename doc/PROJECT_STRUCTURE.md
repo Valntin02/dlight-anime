@@ -8,7 +8,7 @@
 ## 1. 项目定位
 
 - **形态**：一款基于 Java 的 Android 动漫播放客户端（applicationId: `com.dlight`，versionName 由 `PROJ_VERSION` 注入，versionCode 26）。
-- **后端**：自建 FastAPI（默认 baseUrl 由 `Param.java` 控制，联调阶段强制走 `http://127.0.0.1:8000/`，配合 `adb reverse tcp:8000 tcp:8000`；生产可切回 `https://113.45.243.38:10001`）。
+- **后端**：自建 FastAPI。`NetworkConfig` 从构建生成的 `BuildConfig.API_BASE_URL` 读取并校验 baseUrl；Debug 默认 `http://10.0.2.2:8000/`，可用 `-PDLIGHT_DEBUG_API_BASE_URL=...` 覆盖；Release 必须提供 HTTPS 的 `-PDLIGHT_RELEASE_API_BASE_URL=...`。
 - **核心库**：基于 [GSYVideoPlayer](https://github.com/CarGuo/GSYVideoPlayer) 多模块工程二次开发，主体业务集中在 `:app` 模块，其余 `:gsyVideoPlayer-*` 系列为播放器内核与解码器分包。
 
 ## 2. 顶层目录
@@ -35,7 +35,7 @@ dlight-anime/
 
 ```
 app/src/main/java/com/dlight/
-├── DlightApplication.java       ← MultiDex Application；初始化网络/播放器/Exo 数据源
+├── DlightApplication.java              ← MultiDex Application；恢复下载任务并初始化播放器/Exo 数据源
 ├── CachedVideo.java                    ← 已下载视频条目模型
 │
 ├── ui/
@@ -48,7 +48,7 @@ app/src/main/java/com/dlight/
 │   │   ├── MyMainFragment.java         ← 首页容器，承载 TopNavigation + FragmentHomePage / FragmentAnime 切换
 │   │   ├── MyPageFragment.java         ← “我的”容器；按登录态加载 LoginFragment / UserFragment，实现登出回调
 │   │   ├── HomeFragment.java / ExploreFragment.java / SearchFragment.java / ProfileFragment.java
-│   │                                   ← 配合 MainActivity 的新版导航，目前只 HomeFragment 接通了 NetworkManager
+│   │                                   ← 配合 MainActivity 的备选导航
 │   ├── home/
 │   │   ├── TopNavigationFragment.java  ← 顶部 “首页/动漫/搜索” 切换 + 跳转 SearchActivity
 │   │   ├── FragmentHomePage.java       ← 首页内容容器（公告 + 今日更新 + 周更）
@@ -91,27 +91,23 @@ app/src/main/java/com/dlight/
 │       ├── ServiceDownload.java        ← 前台 Service：拉取 m3u8 分片下载
 │       └── VideoDownloader.java        ← 多线程下载器，进度回调通知栏
 │
-├── network/                            ← 新版网络层（推荐使用）
-│   ├── NetworkManager.java             ← 单例：Retrofit + Gson + 日志/Token 拦截器 + SharedPreferences token 管理
-│   ├── ApiConfig.java                  ← BASE_URL / 超时常量（已被 Param 动态 baseUrl 取代）
-│   ├── api/
-│   │   ├── VodApi.java                 ← today / weekly / search / suggest / vodlist-page
-│   │   ├── AuthApi.java                ← login / register / get-anno / upload-avatar / sync-* / play-record / user-star
-│   │   ├── CommentApi.java             ← comment-vod-id / comment-user-avatar / comment-reply / comment-up-down / comment-report
-│   │   └── DanmakuApi.java             ← danmaku/get / danmaku/send-danmaku
-│   ├── model/                          ← 新版 ApiResponse<T> + Vod / User / Comment / Danmaku
+├── network/                            ← 网络基础设施（不定义业务 API）
+│   ├── NetworkConfig.java              ← 从 BuildConfig 读取并校验环境 baseUrl
+│   ├── HttpClientFactory.java          ← API/图片 OkHttpClient 单例与统一超时、代理配置
+│   ├── ApiGsonFactory.java             ← Retrofit 共用 Gson 配置
+│   ├── SafeRequestLoggingInterceptor.java ← 仅 Debug 的安全请求摘要日志
+│   ├── LocalOnly.java                  ← 本地环境标记
+│   ├── model/                          ← 仍被 UI/播放器引用的 ApiResponse<T> + Vod / User / Comment / Danmaku
 │   └── exosource/
 │       ├── DlightDefaultHttpDataSource.java
 │       └── DlightExoHttpDataSourceFactory.java   ← 自签证书/SSL 友好的 Exo 数据源
 │
 ├── data/
-│   ├── remote/                         ← 旧版网络层（仍被多数页面直接使用）
-│   │   ├── RetrofitClient.java         ← 单例 Retrofit（基于 Param baseUrl）
-│   │   ├── ApiService.java             ← 与 network/api 几乎重叠的“大杂烩”接口集合
+│   ├── remote/                         ← 唯一活跃的业务 API 边界
+│   │   ├── RetrofitClient.java         ← 使用 NetworkConfig、ApiGsonFactory、HttpClientFactory 创建唯一 Retrofit 实例
+│   │   ├── ApiService.java             ← 所有业务 Retrofit 接口定义
 │   │   ├── ApiClient.java              ← 通用 enqueue + ApiResponseCallback 包装
-│   │   ├── NetworkHelper.java          ← OkHttpClient/Retrofit 构造（含证书放行）
 │   │   ├── AuthHeaderUtil.java         ← bearer(token) 等 Header 帮助方法
-│   │   └── GSYExoHttpDataSourceFactory.java
 │   ├── model/
 │   │   ├── VodData.java / VodResModel.java / VodPageResModel.java
 │   │   ├── SwitchVideoModel.java       ← 多清晰度切换模型
@@ -124,7 +120,7 @@ app/src/main/java/com/dlight/
 │         先调用谁就把 DB 文件名定死成谁（潜在 bug，新增表/库时要留意）
 │
 └── util/
-    ├── Param.java                      ← ★ 单例：baseUrl/IP 获取/状态栏样式/模拟器探测
+    ├── Param.java                      ← 单例：IP 获取/状态栏样式/模拟器探测（不作为 Retrofit baseUrl 来源）
     ├── CommonUtil.java
     ├── NotificationUtils.java          ← 下载通知通道与构造
     ├── SmallVideoHelper.java           ← GSY 列表小窗辅助
@@ -149,7 +145,7 @@ app/src/main/java/com/dlight/
 - ABI 仅打包 `arm64-v8a`、`armeabi-v7a`、`x86`。
 - ViewBinding 已开启；`debug` 与 `release` 都使用 `release.jks` 签名（密钥明文写在 `app/build.gradle`，注意不要外泄）。
 - 关键依赖：
-  - 网络：`com.squareup.retrofit2:retrofit:2.9.0`、`okhttp 4.12.0`、`okhttp logging-interceptor`、`zhy/okhttputils`
+  - 网络：`com.squareup.retrofit2:retrofit:2.9.0`、`okhttp 4.12.0`、`zhy/okhttputils`
   - 图片：`Glide 4.14.0`、`Picasso 2.71828`
   - 数据库：`androidx.room 2.6.1`
   - UI：`com.google.android.material`、`androidx.viewpager2`、`recyclerview 1.4.0`、`appcompat`
@@ -161,8 +157,8 @@ app/src/main/java/com/dlight/
 ## 5. 启动与运行流程
 
 1. `Application.onCreate`（`DlightApplication`）
-   - `Param.getInstance()` 解析 baseUrl（联调写死 `127.0.0.1:8000`，便于 `adb reverse`）。
-   - `NetworkManager.getInstance(this)` 构造 Retrofit 单例并注入 Token 拦截器。
+   - 不主动初始化 Retrofit；首次业务请求时由 `RetrofitClient` 延迟创建唯一 Retrofit 实例。
+   - `RetrofitClient` 使用 `NetworkConfig.apiBaseUrl()`、`ApiGsonFactory` 与 `HttpClientFactory.apiClient()` 完成配置。
    - `PlayerFactory.setPlayManager(IjkPlayerManager.class)` 选择 IJK 播放内核。
    - `ExoSourceManager.setExoMediaSourceInterceptListener` 注入自签证书友好的 Http DataSource Factory。
 2. `Main2Activity.onCreate`：BottomNav 切换 `MyMainFragment` ↔ `MyPageFragment`；onDestroy 在线程池中触发未同步收藏 / 播放记录回传后端。
@@ -175,32 +171,32 @@ app/src/main/java/com/dlight/
 
 | 模块 | 功能要点 | 关键文件 |
 |---|---|---|
-| 启动 / 框架 | MultiDex、网络/播放器/Exo 数据源初始化、状态栏沉浸 | `DlightApplication`, `Param.setStatusBarTransparent` |
+| 启动 / 框架 | MultiDex、中断下载恢复、播放器/Exo 数据源初始化、状态栏沉浸 | `DlightApplication`, `Param.setStatusBarTransparent` |
 | 首页 | 公告滚动栏、今日更新、按周几切换的周更（含内存缓存） | `FragmentHomePage`, `AnnouncementBar`, `UpdateTodayFragment`, `WeeklyShow` |
-| 动漫库 | 分页加载、上拉触底、年份索引筛选 | `FragmentAnime`, `YearIndexAdapter`, `VodApi#getVodListPage` |
+| 动漫库 | 分页加载、上拉触底、年份索引筛选 | `FragmentAnime`, `YearIndexAdapter`, `ApiService#requestVideoPage` |
 | 搜索 | 关键词联想、搜索历史本地存储、结果列表 | `SearchActivity`, `SearchResultAdapter` |
 | 视频播放 | IJK 内核 + 弹幕；多清晰度切换；共享元素过渡；Picture-in-Picture（DetailPlayer） | `DanmkuVideoActivity`, `DanmakuVideoPlayer`, `DetailPlayer`, `PlayActivity`, `PlayTVActivity` |
-| 弹幕 | 拉取 / 发送弹幕，自定义 `SakuraDanmukuParser`，颜色 + 类型选择 | `DanmakuApi`, `DanmakuOptionsFragment`, `SakuraDanmukuParser` |
-| 评论 | 一级评论列表、二级回复、点赞/取消、举报；批量获取头像 | `CommentFragment`, `CommentApi`, `ReplyDialogFragment`, `CommentBottomSheetFragment` |
-| 用户中心 | 登录/注册、头像上传(Multipart)、登出 | `LoginFragment`, `UserFragment`, `AuthApi#login/register/uploadAvatar` |
+| 弹幕 | 拉取 / 发送弹幕，自定义 `SakuraDanmukuParser`，颜色 + 类型选择 | `ApiService#requestData/sendDanmaku`, `DanmakuOptionsFragment`, `SakuraDanmukuParser` |
+| 评论 | 一级评论列表、二级回复、点赞/取消、举报；批量获取头像 | `CommentFragment`, `ApiService`, `ReplyDialogFragment`, `CommentBottomSheetFragment` |
+| 用户中心 | 登录/注册、头像上传(Multipart)、登出 | `LoginFragment`, `UserFragment`, `ApiService#login/register/requestUploadAvatar` |
 | 历史 / 收藏 | Room 本地双表，应用退出时同步未同步条目，进入页面时按需回拉 | `AppDatabase`, `PlayRecord*`, `MyStarRecord*`, `Main2Activity#syncPlayRecord/syncMyStarData` |
 | 离线下载 | m3u8 分片多线程下载、前台 Service、通知栏进度、本地播放 | `ServiceDownload`, `VideoDownloader`, `ActvityDownVideo`, `SimplePlayer`, `NotificationUtils` |
-| 公告 | 接口拉取 + 弹窗 / 滚动条 | `AnnouncementBar`, `AuthApi#getAnnouncement` |
-| 网络层 | Retrofit + OkHttp、Token 拦截、Bearer Header 工具、自签证书 ExoDataSource | `NetworkManager`, `RetrofitClient`, `NetworkHelper`, `AuthHeaderUtil`, `Dlight*HttpDataSource*` |
+| 公告 | 接口拉取 + 弹窗 / 滚动条 | `AnnouncementBar`, `ApiService#requestAnnoData` |
+| 网络层 | 唯一业务 API 边界、Retrofit/OkHttp 配置、Bearer Header 工具、自签证书 ExoDataSource | `ApiService`, `RetrofitClient`, `NetworkConfig`, `HttpClientFactory`, `AuthHeaderUtil`, `Dlight*HttpDataSource*` |
 
-## 7. 后端 API 速查（baseUrl 见 `Param`）
+## 7. 后端 API 速查（baseUrl 见 `NetworkConfig`）
 
 - 认证 / 用户：`/api/login/{login,register,get-anno,upload-avatar,sync-my-star,sync-play-record,play-record,user-star}`
 - 视频：`/api/vodlist/{get-today,get-weekly,search-vod,suggest,vodlist-page}`
 - 评论：`/api/comment/{comment-vod-id,comment-user-avatar,comment-reply,comment-up-down,comment-report}`
 - 弹幕：`/api/danmaku/{get,send-danmaku}`
 
-> 同一接口在 **新版 `network/api/*Api`** 与 **旧版 `data/remote/ApiService`** 中均有定义，新功能优先使用 `NetworkManager.getInstance(...).getXxxApi()`。
+> `data/remote/ApiService.java` 是唯一活跃的业务 API 接口定义。新增接口直接加入该文件，通过 `RetrofitClient.getRetrofitInstance().create(ApiService.class)` 使用；不要新建第二套 Retrofit stack。
 
 ## 8. 注意事项 / 已知坑
 
-1. **双套网络层并存**：`network/*` 是改造后版本（含 `ApiResponse<T>` 与统一 Token 拦截），但绝大多数老页面仍在用 `data/remote/RetrofitClient + ApiService + ApiClient`。新增功能尽量走新版；改老页面时注意 Token Header 取得方式不同。
-2. **`Param.baseUrl` 写死了模拟器联调地址**：上线/真机调试时需要改 `Param` 构造或调用 `setBaseUrl(...)`。
+1. **保持单一 Retrofit stack**：`ApiService` 定义业务接口，`RetrofitClient` 创建 Retrofit，`NetworkConfig` 管理环境 baseUrl，`HttpClientFactory` 创建 OkHttp 客户端。不要复制这些职责或新增平行业务 API 包。
+2. **环境 baseUrl 由构建参数注入**：Debug 可通过 `DLIGHT_DEBUG_API_BASE_URL` 覆盖默认模拟器地址；Release 必须提供 HTTPS 的 `DLIGHT_RELEASE_API_BASE_URL`，不要改 `Param` 切换 API 环境。
 3. **`AppDatabase` 单例混用**：`getInstancePlayRecord` 与 `getInstanceMyStarRecord` 共享 `instance`，先调用方决定数据库文件名（`play_record_db` 或 `myStar_records`），后续要拆分时记得分开持有。
 4. **签名密钥明文**：`app/build.gradle` 中 `release.jks` 的口令为明文（仅适合开发环境），切勿对外公开仓库。
 5. **目录嵌套残留**：`app/src/main/app/src/main/...` 是历史 commit 误嵌套，git status 仍显示这些路径下的修改；新代码请放在正确的一级目录。
@@ -211,8 +207,8 @@ app/src/main/java/com/dlight/
 ## 9. 快速入口索引
 
 - 想看启动入口 → `app/src/main/java/com/dlight/ui/activity/Main2Activity.java`
-- 想加新接口 → `app/src/main/java/com/dlight/network/api/`（再到 `NetworkManager` 暴露 getter）
+- 想加新接口 → `app/src/main/java/com/dlight/data/remote/ApiService.java`（沿用 `RetrofitClient`，不要新建第二套 Retrofit stack）
 - 想动播放器 → `app/src/main/java/com/dlight/ui/player/DanmkuVideoActivity.java` 与 `DanmakuVideoPlayer.java`
 - 想动数据库 → `app/src/main/java/com/dlight/data/local/AppDatabase.java` 及对应 `*Dao`
 - 想换皮 / 颜色 → `app/src/main/res/values/colors.xml` + `styles.xml`
-- 想改全局 baseUrl → `app/src/main/java/com/dlight/util/Param.java`
+- 想改 API 环境 → Debug 使用 `-PDLIGHT_DEBUG_API_BASE_URL=...`，Release 使用 `-PDLIGHT_RELEASE_API_BASE_URL=https://...`；校验逻辑见 `NetworkConfig.java`
