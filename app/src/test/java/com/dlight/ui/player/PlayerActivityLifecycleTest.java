@@ -1,16 +1,22 @@
 package com.dlight.ui.player;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.robolectric.Shadows.shadowOf;
 
 import android.content.Context;
 import android.content.Intent;
 import android.media.AudioManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
+import android.os.Looper;
 
 import com.dlight.R;
 import com.dlight.data.model.VodData;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
+import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 
 import org.junit.After;
@@ -23,6 +29,9 @@ import org.robolectric.RuntimeEnvironment;
 import org.robolectric.android.controller.ActivityController;
 import org.robolectric.annotation.Config;
 import org.robolectric.shadows.ShadowAudioManager;
+import org.robolectric.shadows.ShadowConnectivityManager;
+import org.robolectric.shadows.ShadowNetworkInfo;
+import org.robolectric.util.ReflectionHelpers;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(sdk = 34)
@@ -33,6 +42,19 @@ public class PlayerActivityLifecycleTest {
     public void setUp() {
         GSYVideoManager.releaseAllVideos();
         ShadowAudioManager.reset();
+        Context app = RuntimeEnvironment.getApplication();
+        ConnectivityManager connectivityManager = (ConnectivityManager) app
+            .getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo wifi = ShadowNetworkInfo.newInstance(
+            NetworkInfo.DetailedState.CONNECTED,
+            ConnectivityManager.TYPE_WIFI,
+            0,
+            true,
+            NetworkInfo.State.CONNECTED
+        );
+        ReflectionHelpers.setField(wifi, "mTypeName", "WIFI");
+        ((ShadowConnectivityManager) shadowOf(connectivityManager))
+            .setActiveNetworkInfo(wifi);
     }
 
     @After
@@ -103,6 +125,47 @@ public class PlayerActivityLifecycleTest {
     }
 
     @Test
+    public void danmakuDestroyAfterPrepared_abandonsAudioFocus() throws Exception {
+        ActivityController<DanmkuVideoActivity> controller = createDanmakuActivity();
+        DanmakuVideoPlayer player = controller.get().findViewById(R.id.danmaku_player);
+
+        player.startPlayLogic();
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
+        player.onPrepared();
+
+        controller.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    @Test
+    public void danmakuFullscreenExitAndDestroy_abandonsAudioFocus() throws Exception {
+        ActivityController<DanmkuVideoActivity> controller = createDanmakuActivity();
+        DanmakuVideoPlayer player = controller.get().findViewById(R.id.danmaku_player);
+
+        GSYBaseVideoPlayer fullPlayer = player.startWindowFullscreen(
+            controller.get(),
+            true,
+            true
+        );
+
+        assertNotNull(fullPlayer);
+        assertSame(fullPlayer, player.getFullWindowPlayer());
+        assertTrue(GSYVideoManager.backFromWindowFull(controller.get()));
+        shadowOf(Looper.getMainLooper()).idle();
+        assertNull(player.getFullWindowPlayer());
+
+        player.startPlayLogic();
+        ShadowAudioManager.AudioFocusRequest focusRequest = lastFocusRequest(controller.get());
+
+        controller.pause().stop().destroy();
+        activeController = null;
+
+        assertFocusAbandoned(controller.get(), focusRequest);
+    }
+
+    @Test
     public void playActivityDestroy_abandonsAudioFocus() throws Exception {
         ActivityController<PlayActivity> controller = Robolectric
             .buildActivity(PlayActivity.class)
@@ -142,6 +205,32 @@ public class PlayerActivityLifecycleTest {
         assertNotNull(focusRequest);
         assertNotNull(focusRequest.listener);
         return focusRequest;
+    }
+
+    private ActivityController<DanmkuVideoActivity> createDanmakuActivity() {
+        Context app = RuntimeEnvironment.getApplication();
+        VodData video = new VodData(
+            2,
+            "Lifecycle regression",
+            "",
+            "https://example.com/video.m3u8",
+            "",
+            "1集",
+            "2026",
+            "",
+            "1"
+        );
+        Intent intent = new Intent(app, DanmkuVideoActivity.class)
+            .putExtra("video_data", video)
+            .putExtra("currentEpisode", 1);
+        ActivityController<DanmkuVideoActivity> controller = Robolectric
+            .buildActivity(DanmkuVideoActivity.class, intent)
+            .create()
+            .start()
+            .resume()
+            .visible();
+        activeController = controller;
+        return controller;
     }
 
     private static void assertFocusAbandoned(
