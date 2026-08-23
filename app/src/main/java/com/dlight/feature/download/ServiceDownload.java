@@ -101,6 +101,7 @@ public class ServiceDownload extends Service {
         }
         task.setStatus(DownloadContract.STATUS_DOWNLOADING);
         task.setProgress(0);
+        task.setTransferMetrics(0L, -1L);
         task.setErrorMessage("");
         publish(task);
 
@@ -118,6 +119,18 @@ public class ServiceDownload extends Service {
                             return;
                         }
                         task.setProgress(progress);
+                        publish(task);
+                    }
+                }
+
+                @Override
+                public void onMetrics(int progress, long bytesPerSecond, long etaSeconds) {
+                    synchronized (task) {
+                        if (pauseRequests.contains(task.getTaskId()) || !task.isActive()) {
+                            return;
+                        }
+                        task.setProgress(progress);
+                        task.setTransferMetrics(bytesPerSecond, etaSeconds);
                         publish(task);
                     }
                 }

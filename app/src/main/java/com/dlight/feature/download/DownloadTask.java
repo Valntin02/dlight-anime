@@ -15,10 +15,20 @@ public class DownloadTask {
     private String filePath;
     private String errorMessage;
     private long updatedAt;
+    private long bytesPerSecond;
+    private long etaSeconds;
 
     public DownloadTask(String taskId, int videoId, int episode, String title, String url,
                         String coverUrl, int progress, String status, String filePath,
                         String errorMessage, long updatedAt) {
+        this(taskId, videoId, episode, title, url, coverUrl, progress, status, filePath,
+            errorMessage, updatedAt, 0L, -1L);
+    }
+
+    public DownloadTask(String taskId, int videoId, int episode, String title, String url,
+                        String coverUrl, int progress, String status, String filePath,
+                        String errorMessage, long updatedAt, long bytesPerSecond,
+                        long etaSeconds) {
         this.taskId = safe(taskId);
         this.videoId = videoId;
         this.episode = episode;
@@ -30,6 +40,9 @@ public class DownloadTask {
         this.filePath = safe(filePath);
         this.errorMessage = safe(errorMessage);
         this.updatedAt = updatedAt;
+        this.bytesPerSecond = Math.max(0L, bytesPerSecond);
+        this.etaSeconds = Math.max(-1L, etaSeconds);
+        normalizeMetricsForStatus();
     }
 
     public static DownloadTask queued(String taskId, int videoId, int episode, String title,
@@ -51,6 +64,8 @@ public class DownloadTask {
         json.put("filePath", filePath);
         json.put("errorMessage", errorMessage);
         json.put("updatedAt", updatedAt);
+        json.put("bytesPerSecond", bytesPerSecond);
+        json.put("etaSeconds", etaSeconds);
         return json;
     }
 
@@ -66,7 +81,9 @@ public class DownloadTask {
             json.has("status") ? stringValue(json, "status") : DownloadContract.STATUS_FAILED,
             stringValue(json, "filePath"),
             stringValue(json, "errorMessage"),
-            json.optLong("updatedAt", 0L)
+            json.optLong("updatedAt", 0L),
+            json.optLong("bytesPerSecond", 0L),
+            json.optLong("etaSeconds", -1L)
         );
     }
 
@@ -117,7 +134,34 @@ public class DownloadTask {
 
     public void setStatus(String status) {
         this.status = safe(status);
+        normalizeMetricsForStatus();
         touch();
+    }
+
+    public long getBytesPerSecond() {
+        return bytesPerSecond;
+    }
+
+    public long getEtaSeconds() {
+        return etaSeconds;
+    }
+
+    public void setTransferMetrics(long bytesPerSecond, long etaSeconds) {
+        this.bytesPerSecond = Math.max(0L, bytesPerSecond);
+        this.etaSeconds = Math.max(-1L, etaSeconds);
+        normalizeMetricsForStatus();
+        touch();
+    }
+
+    private void normalizeMetricsForStatus() {
+        if (DownloadContract.STATUS_COMPLETED.equals(status)) {
+            progress = 100;
+            bytesPerSecond = 0L;
+            etaSeconds = 0L;
+        } else if (!DownloadContract.STATUS_DOWNLOADING.equals(status)) {
+            bytesPerSecond = 0L;
+            etaSeconds = -1L;
+        }
     }
 
     public String getFilePath() {

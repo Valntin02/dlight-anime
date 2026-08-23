@@ -45,25 +45,30 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
         ImageLoader.loadCover(holder.image, task.getCoverUrl());
 
         if (DownloadContract.STATUS_QUEUED.equals(task.getStatus())) {
-            holder.status.setText("等待下载 · 点击暂停");
+            holder.status.setText(R.string.download_status_queued);
             holder.progress.setVisibility(View.VISIBLE);
             holder.progress.setIndeterminate(true);
         } else if (DownloadContract.STATUS_DOWNLOADING.equals(task.getStatus())) {
-            holder.status.setText("下载中 " + task.getProgress() + "% · 点击暂停");
+            holder.status.setText(holder.itemView.getContext().getString(
+                    R.string.download_status_downloading, task.getProgress(),
+                    formatSpeed(holder, task.getBytesPerSecond()),
+                    formatEta(holder, task.getEtaSeconds())));
             holder.progress.setVisibility(View.VISIBLE);
             holder.progress.setIndeterminate(false);
             holder.progress.setProgress(task.getProgress());
         } else if (DownloadContract.STATUS_PAUSED.equals(task.getStatus())) {
-            holder.status.setText("已暂停 " + task.getProgress() + "% · 点击继续");
+            holder.status.setText(holder.itemView.getContext().getString(
+                    R.string.download_status_paused, task.getProgress()));
             holder.progress.setVisibility(View.VISIBLE);
             holder.progress.setIndeterminate(false);
             holder.progress.setProgress(task.getProgress());
         } else if (DownloadContract.STATUS_COMPLETED.equals(task.getStatus())) {
-            holder.status.setText("已缓存 · 点击播放");
+            holder.status.setText(R.string.download_status_completed);
             holder.progress.setVisibility(View.GONE);
         } else {
             String message = task.getErrorMessage().isEmpty() ? "下载失败" : task.getErrorMessage();
-            holder.status.setText("下载失败 · 点击重试\n" + message);
+            holder.status.setText(holder.itemView.getContext().getString(
+                    R.string.download_status_failed, message));
             holder.progress.setVisibility(View.GONE);
         }
 
@@ -87,6 +92,27 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
     @Override
     public int getItemCount() {
         return tasks.size();
+    }
+
+    private static String formatSpeed(VideoViewHolder holder, long bytesPerSecond) {
+        double kibibytes = Math.max(0L, bytesPerSecond) / 1024.0d;
+        if (kibibytes >= 1024.0d) {
+            return holder.itemView.getContext().getString(
+                    R.string.download_speed_mib, kibibytes / 1024.0d);
+        }
+        return holder.itemView.getContext().getString(R.string.download_speed_kib, kibibytes);
+    }
+
+    private static String formatEta(VideoViewHolder holder, long etaSeconds) {
+        if (etaSeconds < 0L) {
+            return holder.itemView.getContext().getString(R.string.download_eta_calculating);
+        }
+        if (etaSeconds >= 60L) {
+            return holder.itemView.getContext().getString(
+                    R.string.download_eta_minutes,
+                    etaSeconds / 60L + (etaSeconds % 60L == 0L ? 0L : 1L));
+        }
+        return holder.itemView.getContext().getString(R.string.download_eta_seconds, etaSeconds);
     }
 
     static class VideoViewHolder extends RecyclerView.ViewHolder {

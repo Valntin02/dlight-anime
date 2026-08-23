@@ -48,6 +48,43 @@ public class VideoDownloaderFileTest {
     }
 
     @Test
+    public void segmentWriteCountsActualCopiedBytes() throws Exception {
+        File destination = new File(temporaryFolder.getRoot(), "measured.ts");
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(1, () -> 0L);
+
+        long copied = VideoDownloader.writeSegment(
+                new ByteArrayInputStream(bytes("actual bytes")), destination, null, metrics);
+        DownloadProgressMetrics.Snapshot snapshot = metrics.segmentCompleted(copied);
+
+        assertEquals(bytes("actual bytes").length, copied);
+        assertEquals(bytes("actual bytes").length, snapshot.getDownloadedBytes());
+        assertEquals(100, snapshot.getProgress());
+    }
+
+    @Test
+    public void legacyCallbackReceivesProgressFromDefaultMetricsMethod() {
+        AtomicInteger progress = new AtomicInteger();
+        VideoDownloader.DownloadCallback callback = new VideoDownloader.DownloadCallback() {
+            @Override
+            public void onProgress(int value) {
+                progress.set(value);
+            }
+
+            @Override
+            public void onSuccess(File file) {
+            }
+
+            @Override
+            public void onFailure(Exception error) {
+            }
+        };
+
+        callback.onMetrics(37, 1024L, 9L);
+
+        assertEquals(37, progress.get());
+    }
+
+    @Test
     public void segmentReadFailureRemovesPartAndDoesNotPublishFinalFile() throws Exception {
         File destination = new File(temporaryFolder.getRoot(), "0.ts");
 
@@ -61,6 +98,28 @@ public class VideoDownloaderFileTest {
 
         assertFalse(destination.exists());
         assertFalse(new File(destination.getPath() + ".part").exists());
+    }
+
+    @Test
+    public void failedAttemptBytesAffectSpeedButNotProgressEstimate() throws Exception {
+        File failed = new File(temporaryFolder.getRoot(), "failed.ts");
+        File completed = new File(temporaryFolder.getRoot(), "completed.ts");
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(2, () -> 0L);
+        try {
+            VideoDownloader.writeSegment(new FailingInputStream(bytes("discarded")),
+                    failed, null, metrics);
+            fail("Expected IOException");
+        } catch (IOException expected) {
+            assertEquals("simulated read failure", expected.getMessage());
+        }
+
+        long copied = VideoDownloader.writeSegment(new ByteArrayInputStream(bytes("kept")),
+                completed, null, metrics);
+        DownloadProgressMetrics.Snapshot snapshot = metrics.segmentCompleted(copied);
+
+        assertEquals(bytes("discarded").length + bytes("kept").length,
+                snapshot.getDownloadedBytes());
+        assertEquals(50, snapshot.getProgress());
     }
 
     @Test
@@ -561,6 +620,29 @@ public class VideoDownloaderFileTest {
     }
 
     @Test
+    public void downloadedSegmentPublishesMetricsBeforeSingleTerminalCallback() throws Exception {
+        JdkHttpServer server = newServer();
+        server.createContext("/playlist.m3u8", exchange -> respond(exchange, 200,
+                "#EXTM3U\n#EXTINF:1,\nsegment.ts\n"));
+        server.createContext("/segment.ts", exchange -> respond(exchange, 200, "measured"));
+        server.start();
+        try {
+            File destination = temporaryFolder.newFolder("measured-download");
+            RecordingCallback callback = new RecordingCallback();
+
+            VideoDownloader.mulDownloadM3u8(serverBase(server) + "/playlist.m3u8",
+                    destination, "episode", true, null, callback);
+
+            assertEquals(1, callback.metrics.get());
+            assertEquals(1, callback.terminals.get());
+            assertEquals(0, callback.metricsAfterTerminal.get());
+            assertTrue(callback.success.get().isFile());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     public void explicitDeleteRemovesTaskTempDirectory() throws Exception {
         File destination = temporaryFolder.newFolder("downloads");
         String playlistUrl = "https://cdn.example.com/playlist.m3u8";
@@ -711,11 +793,22 @@ public class VideoDownloaderFileTest {
         private final AtomicReference<File> success = new AtomicReference<>();
         private final AtomicInteger paused = new AtomicInteger();
         private final AtomicInteger progress = new AtomicInteger();
+        private final AtomicInteger metrics = new AtomicInteger();
+        private final AtomicInteger metricsAfterTerminal = new AtomicInteger();
         private final AtomicInteger terminals = new AtomicInteger();
 
         @Override
         public void onProgress(int progress) {
             this.progress.incrementAndGet();
+        }
+
+        @Override
+        public void onMetrics(int progress, long bytesPerSecond, long etaSeconds) {
+            if (terminals.get() > 0) {
+                metricsAfterTerminal.incrementAndGet();
+            }
+            metrics.incrementAndGet();
+            onProgress(progress);
         }
 
         @Override
