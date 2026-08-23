@@ -31,27 +31,33 @@ public final class DownloadPreflight {
         long availableBytes(File directory);
     }
 
+    public interface NetworkProvider {
+        Snapshot capture();
+    }
+
     public static final class Snapshot {
         private final boolean activeNetwork;
         private final boolean internet;
         private final boolean validated;
         private final Transport transport;
+        private final boolean metered;
 
         private Snapshot(boolean activeNetwork, boolean internet, boolean validated,
-                Transport transport) {
+                Transport transport, boolean metered) {
             this.activeNetwork = activeNetwork;
             this.internet = internet;
             this.validated = validated;
             this.transport = transport;
+            this.metered = metered;
         }
 
         public static Snapshot disconnected() {
-            return new Snapshot(false, false, false, null);
+            return new Snapshot(false, false, false, null, false);
         }
 
         public static Snapshot connected(boolean internet, boolean validated,
-                Transport transport) {
-            return new Snapshot(true, internet, validated, transport);
+                Transport transport, boolean metered) {
+            return new Snapshot(true, internet, validated, transport, metered);
         }
     }
 
@@ -59,6 +65,10 @@ public final class DownloadPreflight {
     }
 
     public static Result check(Context context) {
+        return check(context, null, false);
+    }
+
+    public static Result check(Context context, File videoDirectory, boolean meteredConfirmed) {
         try {
             Context appContext = context.getApplicationContext();
             if (appContext == null) {
@@ -68,17 +78,30 @@ public final class DownloadPreflight {
             if (filesDirectory == null) {
                 return Result.ERROR;
             }
-            File videoDirectory = new File(filesDirectory, "video");
-            File storageDirectory = videoDirectory.exists() ? videoDirectory : filesDirectory;
-            return evaluate(captureNetwork(appContext), storageDirectory,
-                    directory -> new StatFs(directory.getAbsolutePath()).getAvailableBytes());
+            File requestedDirectory = videoDirectory == null
+                    ? new File(filesDirectory, "video") : videoDirectory;
+            File storageDirectory = existingDirectory(requestedDirectory, filesDirectory);
+            Context capturedContext = appContext;
+            return check(() -> captureNetwork(capturedContext), storageDirectory,
+                    directory -> new StatFs(directory.getAbsolutePath()).getAvailableBytes(),
+                    meteredConfirmed);
+        } catch (RuntimeException exception) {
+            return Result.ERROR;
+        }
+    }
+
+    public static Result check(NetworkProvider networkProvider, File storageDirectory,
+            StorageProvider storageProvider, boolean meteredConfirmed) {
+        try {
+            return evaluate(networkProvider.capture(), storageDirectory, storageProvider,
+                    meteredConfirmed);
         } catch (RuntimeException exception) {
             return Result.ERROR;
         }
     }
 
     public static Result evaluate(Snapshot snapshot, File storageDirectory,
-            StorageProvider storageProvider) {
+            StorageProvider storageProvider, boolean meteredConfirmed) {
         if (snapshot == null || !snapshot.activeNetwork
                 || !snapshot.internet || !snapshot.validated) {
             return Result.OFFLINE;
@@ -91,8 +114,19 @@ public final class DownloadPreflight {
         } catch (RuntimeException exception) {
             return Result.ERROR;
         }
-        return snapshot.transport == Transport.CELLULAR
+        return snapshot.metered && !meteredConfirmed
                 ? Result.CONFIRM_CELLULAR : Result.READY;
+    }
+
+    private static File existingDirectory(File requestedDirectory, File filesDirectory) {
+        File candidate = requestedDirectory;
+        while (candidate != null) {
+            if (candidate.exists()) {
+                return candidate;
+            }
+            candidate = candidate.getParentFile();
+        }
+        return filesDirectory;
     }
 
     private static Snapshot captureNetwork(Context context) {
@@ -110,10 +144,12 @@ public final class DownloadPreflight {
         if (capabilities == null) {
             return null;
         }
-        return Snapshot.connected(
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET),
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED),
-                transportOf(capabilities));
+        boolean internet =
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET);
+        boolean validated =
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED);
+        boolean metered = internet && validated && connectivityManager.isActiveNetworkMetered();
+        return Snapshot.connected(internet, validated, transportOf(capabilities), metered);
     }
 
     private static Transport transportOf(NetworkCapabilities capabilities) {

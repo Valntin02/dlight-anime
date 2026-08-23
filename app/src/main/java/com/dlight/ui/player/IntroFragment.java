@@ -61,6 +61,7 @@ public class IntroFragment extends Fragment {
 
     private Button btnStar,btnDownLoader;
     private boolean downloadReceiverRegistered;
+    private AlertDialog downloadPreflightDialog;
     private int currentPlayingIndex = 0; // 当前正在播放的索引
 
     private int currentEpisode;
@@ -144,6 +145,16 @@ public class IntroFragment extends Fragment {
         super.onStop();
     }
 
+    @Override
+    public void onDestroyView() {
+        if (downloadPreflightDialog != null) {
+            downloadPreflightDialog.dismiss();
+            downloadPreflightDialog = null;
+        }
+        btnDownLoader = null;
+        super.onDestroyView();
+    }
+
     private void bingBtnDownLoader(){
         btnDownLoader.setOnClickListener(v->{
             if (videoData == null || videourls == null || videourls.isEmpty()
@@ -180,33 +191,55 @@ public class IntroFragment extends Fragment {
             intent.putExtra(DownloadContract.EXTRA_FILE_NAME,
                 videoData.getVod_name() + "—第" + episode + "集");
             intent.putExtra(DownloadContract.EXTRA_PIC_URL, videoData.getVod_pic());
-            startDownload(intent, taskId);
+            startDownload(intent, taskId, false);
         });
 
     }
 
-    private void startDownload(Intent intent, String taskId) {
-        DownloadPreflight.Result result = DownloadPreflight.check(requireContext());
+    private void startDownload(Intent intent, String taskId, boolean meteredConfirmed) {
+        Context context = getContext();
+        if (context == null) {
+            return;
+        }
+        DownloadPreflight.Result result = DownloadPreflight.check(context,
+            new File(context.getFilesDir(), "video"), meteredConfirmed);
         if (result == DownloadPreflight.Result.READY) {
             startDownloadUnchecked(intent, taskId);
         } else if (result == DownloadPreflight.Result.CONFIRM_CELLULAR) {
-            new AlertDialog.Builder(requireContext())
-                .setTitle(R.string.download_cellular_title)
-                .setMessage(R.string.download_cellular_message)
-                .setPositiveButton(R.string.download_cellular_continue,
-                    (dialog, which) -> startDownloadUnchecked(intent, taskId))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+            showMeteredConfirmation(intent, taskId);
         } else if (result == DownloadPreflight.Result.OFFLINE) {
-            Toast.makeText(requireContext(), R.string.download_preflight_offline,
+            Toast.makeText(context, R.string.download_preflight_offline,
                 Toast.LENGTH_SHORT).show();
         } else if (result == DownloadPreflight.Result.LOW_STORAGE) {
-            Toast.makeText(requireContext(), R.string.download_preflight_low_storage,
+            Toast.makeText(context, R.string.download_preflight_low_storage,
                 Toast.LENGTH_LONG).show();
         } else {
-            Toast.makeText(requireContext(), R.string.download_preflight_error,
+            Toast.makeText(context, R.string.download_preflight_error,
                 Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void showMeteredConfirmation(Intent intent, String taskId) {
+        if (downloadPreflightDialog != null && downloadPreflightDialog.isShowing()) {
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+            .setTitle(R.string.download_cellular_title)
+            .setMessage(R.string.download_cellular_message)
+            .setPositiveButton(R.string.download_cellular_continue, (ignored, which) -> {
+                if (isAdded() && getView() != null && btnDownLoader != null) {
+                    startDownload(intent, taskId, true);
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .create();
+        dialog.setOnDismissListener(ignored -> {
+            if (downloadPreflightDialog == dialog) {
+                downloadPreflightDialog = null;
+            }
+        });
+        downloadPreflightDialog = dialog;
+        dialog.show();
     }
 
     private void startDownloadUnchecked(Intent intent, String taskId) {

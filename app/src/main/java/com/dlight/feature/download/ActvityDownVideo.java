@@ -36,6 +36,7 @@ public class ActvityDownVideo extends AppCompatActivity {
     private AdapterDownVideo adapter;
     private TextView emptyView;
     private boolean receiverRegistered;
+    private AlertDialog downloadPreflightDialog;
 
     private final BroadcastReceiver downloadReceiver = new BroadcastReceiver() {
         @Override
@@ -86,6 +87,15 @@ public class ActvityDownVideo extends AppCompatActivity {
         super.onStop();
     }
 
+    @Override
+    protected void onDestroy() {
+        if (downloadPreflightDialog != null) {
+            downloadPreflightDialog.dismiss();
+            downloadPreflightDialog = null;
+        }
+        super.onDestroy();
+    }
+
     private void handleTaskClick(DownloadTask task) {
         if (DownloadContract.STATUS_COMPLETED.equals(task.getStatus())) {
             File file = new File(task.getFilePath());
@@ -103,7 +113,7 @@ public class ActvityDownVideo extends AppCompatActivity {
         } else if (task.isActive()) {
             pauseTask(task);
         } else if (task.isPaused() || DownloadContract.STATUS_FAILED.equals(task.getStatus())) {
-            startTask(task);
+            startTask(task, false);
         }
     }
 
@@ -114,22 +124,17 @@ public class ActvityDownVideo extends AppCompatActivity {
         startService(intent);
     }
 
-    private void startTask(DownloadTask task) {
+    private void startTask(DownloadTask task, boolean meteredConfirmed) {
         if (task.getUrl().isEmpty()) {
             Toast.makeText(this, "旧缓存没有可重试的下载地址", Toast.LENGTH_SHORT).show();
             return;
         }
-        DownloadPreflight.Result result = DownloadPreflight.check(this);
+        DownloadPreflight.Result result = DownloadPreflight.check(this,
+            new File(getFilesDir(), "video"), meteredConfirmed);
         if (result == DownloadPreflight.Result.READY) {
             startTaskUnchecked(task);
         } else if (result == DownloadPreflight.Result.CONFIRM_CELLULAR) {
-            new AlertDialog.Builder(this)
-                .setTitle(R.string.download_cellular_title)
-                .setMessage(R.string.download_cellular_message)
-                .setPositiveButton(R.string.download_cellular_continue,
-                    (dialog, which) -> startTaskUnchecked(task))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+            showMeteredConfirmation(task);
         } else if (result == DownloadPreflight.Result.OFFLINE) {
             Toast.makeText(this, R.string.download_preflight_offline, Toast.LENGTH_SHORT).show();
         } else if (result == DownloadPreflight.Result.LOW_STORAGE) {
@@ -137,6 +142,29 @@ public class ActvityDownVideo extends AppCompatActivity {
         } else {
             Toast.makeText(this, R.string.download_preflight_error, Toast.LENGTH_LONG).show();
         }
+    }
+
+    private void showMeteredConfirmation(DownloadTask task) {
+        if (downloadPreflightDialog != null && downloadPreflightDialog.isShowing()) {
+            return;
+        }
+        AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(R.string.download_cellular_title)
+            .setMessage(R.string.download_cellular_message)
+            .setPositiveButton(R.string.download_cellular_continue, (ignored, which) -> {
+                if (!isFinishing() && !isDestroyed()) {
+                    startTask(task, true);
+                }
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .create();
+        dialog.setOnDismissListener(ignored -> {
+            if (downloadPreflightDialog == dialog) {
+                downloadPreflightDialog = null;
+            }
+        });
+        downloadPreflightDialog = dialog;
+        dialog.show();
     }
 
     private void startTaskUnchecked(DownloadTask task) {
