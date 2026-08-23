@@ -20,6 +20,12 @@ public class HomeLoadStateTest {
     }
 
     @Test
+    public void errorIsShownOnlyWithoutOldContent() {
+        assertTrue(HomeLoadStatePolicy.shouldShowError(false));
+        assertFalse(HomeLoadStatePolicy.shouldShowError(true));
+    }
+
+    @Test
     public void weeklyRejectsOlderSelectionAfterSwitch() {
         HomeLoadStatePolicy.WeeklyTracker<String> tracker =
             new HomeLoadStatePolicy.WeeklyTracker<>("一");
