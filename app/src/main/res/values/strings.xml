@@ -9,4 +9,6 @@
     <string name="load_state_empty_default">暂无内容</string>
     <string name="load_state_error_default">加载失败，请重试</string>
     <string name="load_state_retry">重试</string>
+    <string name="anime_pagination_error">加载更多失败</string>
+    <string name="anime_pagination_retry">重试</string>
 </resources>

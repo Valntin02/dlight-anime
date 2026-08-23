@@ -5,7 +5,6 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -18,6 +17,7 @@ import com.dlight.R;
 import com.dlight.data.remote.RetrofitClient;
 import com.dlight.data.model.VodData;
 import com.dlight.ui.widget.LoadStateView;
+import com.google.android.material.snackbar.Snackbar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -37,10 +37,11 @@ public class FragmentAnime extends Fragment {
     private List<VodData> vodDataList = new ArrayList<>();
 
     private List<String> yearList=new ArrayList<>();
-    //这里的page 和SQL不一样 php里面做了封装 从1开始，page等于多少 就等于求第多少页
-    int page=1,limit=36,total=0,totalPage=0;
-    boolean flagRequest=false; //表示是否可以请求
+    private final int limit = 36;
+    private final HomeLoadStatePolicy.AnimeTracker animeTracker =
+        new HomeLoadStatePolicy.AnimeTracker();
     private Call<VodPageResModel> activeCall;
+    private Snackbar paginationErrorSnackbar;
     // 当前年份过滤的 API key; null = 全部 (后端不带 year 参数)
     private String currentYear = null;
     // UI 标签 (中文展示用)
@@ -82,7 +83,7 @@ public class FragmentAnime extends Fragment {
         recyclerView.setOnScrollListener(new RecyclerView.OnScrollListener() {
             //RecyclerView 的 onScrolled 方法会被连续触发多次，因为 RecyclerView 每滚动一小段就会调一次这个监听
             //这里RecyclerView 的 onScrolled 方法会被连续触发多次，因为 RecyclerView 每滚动一小段就会调一次这个监听
-            //使用flagRequeest来屏蔽触发多次，同时也可以作为分页的判断标志
+            // tracker 屏蔽重复请求，并记录是否已到最后一页
             @Override
             public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
                 super.onScrolled(recyclerView, dx, dy);
@@ -94,7 +95,9 @@ public class FragmentAnime extends Fragment {
                         int totalItemCount = layoutManager.getItemCount();
                         int firstVisibleItemPosition = layoutManager.findFirstVisibleItemPosition();//你滑到了第 24 条记录位置
 
-                        if (!flagRequest && (visibleItemCount + firstVisibleItemPosition) >= totalItemCount
+                        if (!animeTracker.isRequesting()
+                            && !animeTracker.isExhausted()
+                            && (visibleItemCount + firstVisibleItemPosition) >= totalItemCount
                             && firstVisibleItemPosition >= 0
                             && totalItemCount >= limit) {
                             // 到达底部，加载下一页
@@ -111,59 +114,60 @@ public class FragmentAnime extends Fragment {
 
 
     private void getVideoPage() {
-        if (flagRequest) {
-            if (!HomeLoadStatePolicy.hasContent(vodDataList)) {
+        boolean hasContent = HomeLoadStatePolicy.hasContent(vodDataList);
+        HomeLoadStatePolicy.AnimeRequest request = animeTracker.start(hasContent);
+        if (request == null) {
+            if (animeTracker.isExhausted() && !hasContent) {
                 loadStateView.showEmpty(null);
             }
             return;
         }
 
-        boolean pagination = HomeLoadStatePolicy.hasContent(vodDataList);
-        if (!pagination) {
+        dismissPaginationError();
+        if (!request.isPagination()) {
             loadStateView.showLoading(null);
         }
-        flagRequest=true;
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
         // currentYear 为 null 时 Retrofit 会自动省略该 query 参数
-        Call<VodPageResModel> call = apiService.requestVideoPage(page, limit, currentYear);
+        Call<VodPageResModel> call = apiService.requestVideoPage(
+            request.page(),
+            limit,
+            currentYear
+        );
         activeCall = call;
 
         ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodPageResModel>() {
             @Override
             public void onSuccess(VodPageResModel data) {
-                if (!canHandle(call)) return;
+                if (!canHandle(call, request)) return;
+                int totalPage = data == null ? 0 : data.getTotalPage();
+                if (!animeTracker.succeed(request, totalPage)) return;
                 activeCall = null;
+                dismissPaginationError();
                 Log.d("FragmentAnime", "msg" + data);
                 List<VodData> items = data == null ? null : data.getVodDataList();
                 if (items != null) {
                     vodDataList.addAll(items);
                 }
-                page++;
-                total=data == null ? 0 : data.getTotal();
-                totalPage=data == null ? 0 : data.getTotalPage();
                 videoAdapter.notifyDataSetChanged();
-                flagRequest=false;
 
                 if (HomeLoadStatePolicy.hasContent(vodDataList)) {
                     loadStateView.hide();
                 } else {
                     loadStateView.showEmpty(null);
                 }
-
-                if(page>totalPage) flagRequest=true;
             }
 
             @Override
             public void onFailure(String error) {
-                if (!canHandle(call)) return;
+                if (!canHandle(call, request)) return;
+                if (!animeTracker.fail(request)) return;
                 activeCall = null;
-                flagRequest=false;
                 Log.e("FragmentAnime", "Error: " + error);
-                if (HomeLoadStatePolicy.shouldPreserveContentOnError(
-                    pagination,
-                    HomeLoadStatePolicy.hasContent(vodDataList)
-                )) {
+                if (request.isPagination()
+                    && HomeLoadStatePolicy.hasContent(vodDataList)) {
                     loadStateView.hide();
+                    showPaginationError();
                 } else {
                     loadStateView.showError(null);
                 }
@@ -177,21 +181,25 @@ public class FragmentAnime extends Fragment {
         if ((next == null && currentYear == null) || (next != null && next.equals(currentYear))) {
             return;
         }
+        dismissPaginationError();
         if (activeCall != null) {
             activeCall.cancel();
             activeCall = null;
         }
         currentYear = next;
-        page = 1;
-        flagRequest = false;
+        animeTracker.reset();
         vodDataList.clear();
         videoAdapter.notifyDataSetChanged();
         recyclerView.scrollToPosition(0);
         getVideoPage();
     }
 
-    private boolean canHandle(Call<VodPageResModel> call) {
+    private boolean canHandle(
+        Call<VodPageResModel> call,
+        HomeLoadStatePolicy.AnimeRequest request
+    ) {
         return activeCall == call
+            && animeTracker.accepts(request)
             && isAdded()
             && recyclerView != null
             && videoAdapter != null
@@ -200,11 +208,12 @@ public class FragmentAnime extends Fragment {
 
     @Override
     public void onDestroyView() {
+        animeTracker.invalidate();
         if (activeCall != null) {
             activeCall.cancel();
             activeCall = null;
-            flagRequest = false;
         }
+        dismissPaginationError();
         if (loadStateView != null) {
             loadStateView.setOnRetryListener(null);
         }
@@ -213,6 +222,27 @@ public class FragmentAnime extends Fragment {
         loadStateView = null;
         videoAdapter = null;
         super.onDestroyView();
+    }
+
+    private void showPaginationError() {
+        if (!isAdded() || recyclerView == null) return;
+        paginationErrorSnackbar = Snackbar.make(
+            recyclerView,
+            R.string.anime_pagination_error,
+            Snackbar.LENGTH_INDEFINITE
+        );
+        paginationErrorSnackbar.setAction(
+            R.string.anime_pagination_retry,
+            view -> getVideoPage()
+        );
+        paginationErrorSnackbar.show();
+    }
+
+    private void dismissPaginationError() {
+        if (paginationErrorSnackbar != null) {
+            paginationErrorSnackbar.dismiss();
+            paginationErrorSnackbar = null;
+        }
     }
 
     /**

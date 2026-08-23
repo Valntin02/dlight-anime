@@ -10,7 +10,6 @@ import android.widget.RadioGroup;
 
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
-import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -20,9 +19,7 @@ import com.dlight.data.model.VodData;
 import com.dlight.ui.widget.LoadStateView;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import retrofit2.Call;
 import com.dlight.data.model.VodResModel;
@@ -36,11 +33,9 @@ public class WeeklyShow extends Fragment {
     private LoadStateView loadStateView;
     private VideoAdapter videoAdapter;
     private List<VodData> vodDataList = new ArrayList<>();
-    // 用来缓存每个星期的数据
-    private Map<String, List<VodData>> dataCache = new HashMap<>();
     private Call<VodResModel> activeCall;
-    private int requestGeneration;
-    private String selectedWeekday = "日";
+    private final HomeLoadStatePolicy.WeeklyTracker<VodData> weeklyTracker =
+        new HomeLoadStatePolicy.WeeklyTracker<>("日");
 
 
     private String getWeekdayString(int checkedId) {
@@ -77,7 +72,9 @@ public class WeeklyShow extends Fragment {
         recyclerView.setLayoutManager(new GridLayoutManager(getActivity(), 3));
         videoAdapter = new VideoAdapter(vodDataList);
         recyclerView.setAdapter(videoAdapter);
-        loadStateView.setOnRetryListener(view -> fetchDataForWeekday(selectedWeekday));
+        loadStateView.setOnRetryListener(
+            view -> fetchDataForWeekday(weeklyTracker.selectedWeekday())
+        );
         // 获取RadioGroup
         RadioGroup weekdayRadioGroup = rootView.findViewById(R.id.weekday_radio_group);
 
@@ -116,13 +113,13 @@ public class WeeklyShow extends Fragment {
             activeCall.cancel();
             activeCall = null;
         }
-        selectedWeekday = weekday;
-        int generation = ++requestGeneration;
+        HomeLoadStatePolicy.WeeklySelection<VodData> selection =
+            weeklyTracker.select(weekday);
 
         // 首先检查缓存中是否有该星期的数据
-        if (dataCache.containsKey(weekday)) {
+        if (selection.hasCachedValue()) {
             // 如果缓存中有数据，则直接使用缓存的数据
-            List<VodData> cachedItems = dataCache.get(weekday);
+            List<VodData> cachedItems = selection.cachedItems();
             vodDataList.clear();
             if (cachedItems != null) {
                 vodDataList.addAll(cachedItems);
@@ -147,7 +144,7 @@ public class WeeklyShow extends Fragment {
         ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodResModel>() {
             @Override
             public void onSuccess(VodResModel data) {
-                if (!canHandle(generation, weekday)) return;
+                if (!canHandle(call, selection)) return;
                 activeCall = null;
                 Log.d(TAG, "msg" + data);
                 List<VodData> items = data == null ? null : data.getVodDataList();
@@ -157,7 +154,7 @@ public class WeeklyShow extends Fragment {
                 }
                 videoAdapter.notifyDataSetChanged();
                 // 将请求到的数据缓存到 Map 中
-                dataCache.put(weekday, new ArrayList<>(vodDataList));
+                weeklyTracker.cache(selection, vodDataList);
                 if (HomeLoadStatePolicy.hasContent(items)) {
                     loadStateView.hide();
                 } else {
@@ -167,7 +164,7 @@ public class WeeklyShow extends Fragment {
 
             @Override
             public void onFailure(String error) {
-                if (!canHandle(generation, weekday)) return;
+                if (!canHandle(call, selection)) return;
                 activeCall = null;
                 Log.e(TAG, "Error: " + error);
                 loadStateView.showError(null);
@@ -175,13 +172,12 @@ public class WeeklyShow extends Fragment {
         });
     }
 
-    private boolean canHandle(int generation, String weekday) {
-        return HomeLoadStatePolicy.isCurrentWeeklyRequest(
-                generation,
-                weekday,
-                requestGeneration,
-                selectedWeekday
-            )
+    private boolean canHandle(
+        Call<VodResModel> call,
+        HomeLoadStatePolicy.WeeklySelection<VodData> selection
+    ) {
+        return activeCall == call
+            && weeklyTracker.accepts(selection)
             && isAdded()
             && recyclerView != null
             && videoAdapter != null
@@ -190,7 +186,7 @@ public class WeeklyShow extends Fragment {
 
     @Override
     public void onDestroyView() {
-        requestGeneration++;
+        weeklyTracker.invalidate();
         if (activeCall != null) {
             activeCall.cancel();
             activeCall = null;
