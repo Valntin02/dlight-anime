@@ -25,6 +25,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.dlight.R;
 import com.dlight.data.remote.RetrofitClient;
 import com.dlight.data.model.VodData;
+import com.dlight.ui.widget.LoadStateView;
 import com.dlight.util.Param;
 
 import java.util.*;
@@ -39,6 +40,7 @@ public class SearchActivity extends AppCompatActivity {
     private EditText editTextSearch;
     private Button btnSearch;
     private RecyclerView recyclerViewResults;
+    private LoadStateView searchLoadState;
     private LinearLayout historyContainer;
     private TextView textHistory,textClear;
     private SharedPreferences preferences;
@@ -51,6 +53,11 @@ public class SearchActivity extends AppCompatActivity {
     private List<String> historyList = new ArrayList<>();
     private SearchResultAdapter adapter;
     private List<VodData> videoResultList = new ArrayList<>();
+    private final SearchRequestTracker searchRequestTracker = new SearchRequestTracker();
+    private Call<VodResModel> activeSearchCall;
+    private Call<Map<String, Object>> activeSuggestionCall;
+    private int suggestionGeneration;
+    private boolean destroyed;
 
     //用来处理点击联想列表的关闭不了的bug
     private boolean isSettingText = false;
@@ -64,12 +71,14 @@ public class SearchActivity extends AppCompatActivity {
         editTextSearch = findViewById(R.id.editTextSearch);
         btnSearch = findViewById(R.id.btnSearch);
         recyclerViewResults = findViewById(R.id.recyclerViewResults);
+        searchLoadState = findViewById(R.id.search_load_state);
         historyContainer = findViewById(R.id.historyContainer);
         textHistory=findViewById(R.id.textHistory);
         textClear=findViewById(R.id.textClear);
         listViewSuggestions = findViewById(R.id.listViewSuggestions);
         suggestionAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, suggestionList);
         listViewSuggestions.setAdapter(suggestionAdapter);
+        searchLoadState.setOnRetryListener(v -> retrySearch());
 
         preferences = getSharedPreferences("SearchPrefs", MODE_PRIVATE);
         loadHistory();
@@ -78,10 +87,8 @@ public class SearchActivity extends AppCompatActivity {
             String keyword = editTextSearch.getText().toString().trim();
             if (!keyword.isEmpty()) {
                 saveHistory(keyword);
-                performSearch(keyword);
-            }else{
-                Toast.makeText(this, "请输入视频名！", Toast.LENGTH_SHORT).show();
             }
+            performSearch(keyword);
         });
 
         textClear.setOnClickListener(v->{
@@ -99,12 +106,7 @@ public class SearchActivity extends AppCompatActivity {
             public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if(isSettingText) return;
                 String keyword = s.toString().trim();
-                if (!keyword.isEmpty()) {
-                    getSuggestions(keyword);
-                } else {
-                    suggestionList.clear();
-                    listViewSuggestions.setVisibility(View.GONE);
-                }
+                getSuggestions(keyword);
             }
             @Override
             public void afterTextChanged(Editable s) {}
@@ -117,6 +119,8 @@ public class SearchActivity extends AppCompatActivity {
             editTextSearch.setSelection(selected.length()); // 光标移到最后
             isSettingText=false;
             suggestionList.clear();
+            suggestionGeneration++;
+            cancelSuggestions();
             editTextSearch.clearFocus();
             listViewSuggestions.setVisibility(View.GONE);
 
@@ -136,72 +140,130 @@ public class SearchActivity extends AppCompatActivity {
     }
 
     private void performSearch(String keyword) {
+        cancelActiveSearch();
+        SearchRequestTracker.Request request = searchRequestTracker.begin(keyword);
+        if (!request.shouldRequest()) {
+            showHistory();
+            return;
+        }
 
-        getRearch(keyword);
-//        if (videoResultList.isEmpty()) {
-//            Toast.makeText(this, "没有找到相关内容", Toast.LENGTH_SHORT).show();
-//        }
-
-        // 隐藏历史记录，显示结果
+        cancelSuggestions();
         textHistory.setVisibility(View.GONE);
         textClear.setVisibility(View.GONE);
         historyContainer.setVisibility(View.GONE);
         suggestionList.clear();
+        suggestionAdapter.notifyDataSetChanged();
         editTextSearch.clearFocus();
         listViewSuggestions.setVisibility(View.GONE);
+        adapter.setData(Collections.emptyList());
         recyclerViewResults.setVisibility(View.VISIBLE);
+        searchLoadState.showLoading(null);
+        startSearch(request);
+    }
 
+    private void retrySearch() {
+        SearchRequestTracker.Request request = searchRequestTracker.retry();
+        if (!request.shouldRequest()) {
+            return;
+        }
+        cancelActiveSearch();
+        recyclerViewResults.setVisibility(View.VISIBLE);
+        searchLoadState.showLoading(null);
+        startSearch(request);
     }
 
     //搜索视频的请求处理
-    private void getRearch(String input) {
-        if (input == "" || input.isEmpty()) return;
-        // 替换为你的实际请求接口，GET 方式携带 input_search 参数
+    private void startSearch(SearchRequestTracker.Request request) {
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
-        //这里就不创建新的接受类了 使用泛 Map
-        Call<VodResModel> call = apiService.requestRearchVodData(input);
+        Call<VodResModel> call = apiService.requestRearchVodData(request.getKeyword());
+        activeSearchCall = call;
 
         ApiClient.requestData(call, new ApiClient.ApiResponseCallback<VodResModel>() {
             @Override
             public void onSuccess(VodResModel data) {
-
-                if (data.getCode() == 200) {
-                    adapter.setData(data.getVodDataList());
-                }else{
-                    recyclerViewResults.setVisibility(View.GONE);
-                    Toast.makeText(getApplicationContext(), "没有找到相关内容", Toast.LENGTH_SHORT).show();
-                    Log.e("Suggestion", "error:" + data);
+                if (!canHandleSearch(call, request.getGeneration())) {
+                    return;
                 }
+                activeSearchCall = null;
+                SearchRequestTracker.State state = searchRequestTracker.onSuccess(
+                    request.getGeneration(),
+                    data.getCode(),
+                    data.getVodDataList()
+                );
+                renderSearchState(state, data.getVodDataList());
             }
 
             @Override
             public void onFailure(String error) {
-
+                if (!canHandleSearch(call, request.getGeneration())) {
+                    return;
+                }
+                activeSearchCall = null;
+                renderSearchState(
+                    searchRequestTracker.onFailure(request.getGeneration()),
+                    null
+                );
                 Log.e("Suggestion", "error:" + error);
             }
         });
-
     }
+
+    private boolean canHandleSearch(Call<VodResModel> call, int generation) {
+        return activeSearchCall == call
+            && searchRequestTracker.isCurrent(generation)
+            && !isActivityInactive();
+    }
+
+    private void renderSearchState(SearchRequestTracker.State state, List<VodData> results) {
+        if (state == SearchRequestTracker.State.CONTENT) {
+            adapter.setData(results);
+            recyclerViewResults.setVisibility(View.VISIBLE);
+            searchLoadState.hide();
+        } else if (state == SearchRequestTracker.State.EMPTY) {
+            adapter.setData(Collections.emptyList());
+            recyclerViewResults.setVisibility(View.GONE);
+            searchLoadState.showEmpty(null);
+        } else if (state == SearchRequestTracker.State.ERROR) {
+            adapter.setData(Collections.emptyList());
+            recyclerViewResults.setVisibility(View.GONE);
+            searchLoadState.showError(null);
+        }
+    }
+
     //联想的请求处理
     private void getSuggestions(String input) {
-        if(input ==" " || input.isEmpty()) return;
-        // 替换为你的实际请求接口，GET 方式携带 input_search 参数
+        String keyword = input == null ? "" : input.trim();
+        cancelSuggestions();
+        int generation = ++suggestionGeneration;
+        if (keyword.isEmpty()) {
+            suggestionList.clear();
+            suggestionAdapter.notifyDataSetChanged();
+            listViewSuggestions.setVisibility(View.GONE);
+            return;
+        }
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
-        //这里就不创建新的接受类了 使用泛 Map
-        Call<Map<String, Object>> call = apiService.requestSuggestData(input);
+        Call<Map<String, Object>> call = apiService.requestSuggestData(keyword);
+        activeSuggestionCall = call;
 
         ApiClient.requestData(call, new ApiClient.ApiResponseCallback<Map<String, Object>>() {
             @Override
             public void onSuccess(Map<String, Object> data) {
-                //code 可能变成 Double 类型 是因为 Gson 在反序列化 JSON 数值时默认使用 Double
-                Double codeDouble = (Double) data.get("code"); // Gson 处理整数字段可能会变成 Double
-                int code = codeDouble.intValue();
+                if (!canHandleSuggestion(call, generation)) {
+                    return;
+                }
+                activeSuggestionCall = null;
+                Number codeValue = (Number) data.get("code");
+                int code = codeValue == null ? -1 : codeValue.intValue();
                 if (code == 200) {
                     suggestionList.clear();
-                    List<String> list = (List<String>) data.get("data"); // 强转
-                    suggestionList.addAll(list);
+                    Object result = data.get("data");
+                    if (result instanceof List) {
+                        suggestionList.addAll((List<String>) result);
+                    }
                     suggestionAdapter.notifyDataSetChanged();
-                    listViewSuggestions.setVisibility(View.VISIBLE);
+                    listViewSuggestions.setVisibility(
+                        suggestionList.isEmpty() ? View.GONE : View.VISIBLE
+                    );
                 } else {
                     listViewSuggestions.setVisibility(View.GONE);
                 }
@@ -209,10 +271,50 @@ public class SearchActivity extends AppCompatActivity {
 
             @Override
             public void onFailure(String error) {
+                if (!canHandleSuggestion(call, generation)) {
+                    return;
+                }
+                activeSuggestionCall = null;
                 listViewSuggestions.setVisibility(View.GONE);
                 Log.e("Suggestion", "error:" + error);
             }
         });
+    }
+
+    private boolean canHandleSuggestion(Call<Map<String, Object>> call, int generation) {
+        return activeSuggestionCall == call
+            && generation == suggestionGeneration
+            && !isActivityInactive();
+    }
+
+    private void cancelActiveSearch() {
+        if (activeSearchCall != null) {
+            activeSearchCall.cancel();
+            activeSearchCall = null;
+        }
+    }
+
+    private void cancelSuggestions() {
+        if (activeSuggestionCall != null) {
+            activeSuggestionCall.cancel();
+            activeSuggestionCall = null;
+        }
+    }
+
+    private void showHistory() {
+        searchLoadState.hide();
+        recyclerViewResults.setVisibility(View.GONE);
+        textHistory.setVisibility(View.VISIBLE);
+        textClear.setVisibility(View.VISIBLE);
+        historyContainer.setVisibility(View.VISIBLE);
+        suggestionList.clear();
+        suggestionAdapter.notifyDataSetChanged();
+        listViewSuggestions.setVisibility(View.GONE);
+    }
+
+    private boolean isActivityInactive() {
+        return destroyed || isFinishing()
+            || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1 && isDestroyed());
     }
 
 
@@ -264,21 +366,24 @@ public class SearchActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        if (recyclerViewResults.getVisibility() == View.VISIBLE) {
-            // 当前显示的是搜索结果，返回时切换回历史记录界面
-            recyclerViewResults.setVisibility(View.GONE);
-            textHistory.setVisibility(View.VISIBLE);
-            textClear.setVisibility(View.VISIBLE);
-            historyContainer.setVisibility(View.VISIBLE);
-            //直接设置为null 造成报错 如果返回之后再启动
-            //adapter.setData(null);//清空recycle 防止下次请求使用上次数据
-            editTextSearch.setText(""); // 可选：清空搜索框
+        if (recyclerViewResults.getVisibility() == View.VISIBLE
+            || searchLoadState.getVisibility() == View.VISIBLE) {
+            editTextSearch.setText("");
+            performSearch("");
         } else {
-            // 否则执行默认的返回行为（退出页面）
             super.onBackPressed();
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        destroyed = true;
+        searchRequestTracker.destroy();
+        suggestionGeneration++;
+        cancelActiveSearch();
+        cancelSuggestions();
+        super.onDestroy();
+    }
+
 
 }
-

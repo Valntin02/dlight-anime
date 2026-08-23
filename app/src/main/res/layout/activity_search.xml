@@ -47,12 +47,22 @@
 
 
     <!-- 搜索结果区域 -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerViewResults"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:visibility="gone" />
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerViewResults"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone" />
+
+        <com.dlight.ui.widget.LoadStateView
+            android:id="@+id/search_load_state"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </FrameLayout>
 
     <!-- 历史记录 -->
     <RelativeLayout
