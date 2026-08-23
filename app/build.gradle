@@ -31,13 +31,15 @@ def validateApiBaseUrl = { String rawValue, String propertyName, boolean require
 
     def scheme = uri.scheme
     def port = uri.port
+    def rawPath = uri.rawPath
     def validScheme = scheme?.equalsIgnoreCase("https")
         || (!requireHttps && scheme?.equalsIgnoreCase("http"))
     if (!validScheme
         || uri.host == null || uri.rawQuery != null || uri.rawFragment != null
+        || !(rawPath == null || rawPath.isEmpty() || rawPath == "/")
         || port < -1 || port == 0 || port > 65535) {
         throw new GradleException(
-            "${propertyName} must use ${allowedSchemes}, include a host and valid port, and omit query and fragment"
+            "${propertyName} must use ${allowedSchemes}, include a host and valid port, omit query and fragment, and use only the root path"
         )
     }
     value

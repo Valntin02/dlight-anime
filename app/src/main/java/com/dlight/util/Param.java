@@ -6,7 +6,6 @@ import android.graphics.Color;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.text.format.Formatter;
-import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -22,31 +21,14 @@ import java.net.URL;
 import java.util.Enumeration;
 
 public class Param {
-    private static final String TAG = "Param";
-
     // 单例模式
     private static volatile Param instance = null;
 
-    // 模拟器内置 host loopback 别名，免 adb reverse；真机需走 DEVICE_BASE_URL
-    private static final String EMULATOR_BASE_URL = "http://10.0.2.2:8000/";
-    private static final String DEVICE_BASE_URL = "http://192.168.224.127:8000/";
-
     // 参数
-//    private String baseUrl = "https://113.45.243.38/";
-    private String baseUrl;
     private String ipAddress = "0.0.0.0";  // IP地址
 
     // 私有构造函数，防止外部创建
     private Param() {
-        // 联调阶段默认强制走模拟器宿主机地址，避免机型识别差异导致地址误判
-        boolean isEmulator = isRunningOnEmulator();
-        baseUrl = EMULATOR_BASE_URL;
-        Log.d(TAG, "init baseUrl=" + baseUrl
-            + ", isEmulator=" + isEmulator
-            + ", fingerprint=" + Build.FINGERPRINT
-            + ", model=" + Build.MODEL
-            + ", product=" + Build.PRODUCT
-            + ", hardware=" + Build.HARDWARE);
     }
 
     // 获取单例实例
@@ -145,17 +127,6 @@ public class Param {
         return "0.0.0.0";
     }
 
-    // Getter方法
-    public String getBaseUrl() {
-        return baseUrl;
-    }
-
-    public void setBaseUrl(String baseUrl) {
-        if (baseUrl != null && !baseUrl.trim().isEmpty()) {
-            this.baseUrl = baseUrl.trim();
-        }
-    }
-
     public String getIpAddress() {
         return ipAddress;
     }
@@ -194,34 +165,4 @@ public class Param {
         window.setStatusBarColor(statusBarColor);
     }
 
-    private static boolean isRunningOnEmulator() {
-        String fingerprint = safeLower(Build.FINGERPRINT);
-        String model = safeLower(Build.MODEL);
-        String manufacturer = safeLower(Build.MANUFACTURER);
-        String brand = safeLower(Build.BRAND);
-        String device = safeLower(Build.DEVICE);
-        String product = safeLower(Build.PRODUCT);
-        String hardware = safeLower(Build.HARDWARE);
-
-        return fingerprint.startsWith("generic")
-            || fingerprint.startsWith("unknown")
-            || fingerprint.contains("emulator")
-            || model.contains("google_sdk")
-            || model.contains("emulator")
-            || model.contains("android sdk built for x86")
-            || manufacturer.contains("genymotion")
-            || (brand.startsWith("generic") && device.startsWith("generic"))
-            || product.equals("google_sdk")
-            || product.contains("sdk")
-            || product.contains("emulator")
-            || product.contains("simulator")
-            || hardware.contains("goldfish")
-            || hardware.contains("ranchu")
-            || hardware.contains("vbox86")
-            || hardware.contains("qemu");
-    }
-
-    private static String safeLower(String value) {
-        return value == null ? "" : value.toLowerCase();
-    }
 }

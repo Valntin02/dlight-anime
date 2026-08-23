@@ -109,7 +109,7 @@ tasks.matching { it.name == "preReleaseBuild" }.configureEach {
 }
 ```
 
-The Release pre-build validator must additionally require the `https` scheme because the main network security configuration rejects cleartext. Debug validation continues to allow `http` for the emulator backend.
+The Release pre-build validator must additionally require the `https` scheme because the main network security configuration rejects cleartext. Debug validation continues to allow `http` for the emulator backend. Both validators accept only a root URL (no non-root or encoded path), because callers append endpoint paths to the configured origin.
 
 - [ ] **Step 3: Write the failing URL normalization tests**
 
@@ -131,9 +131,13 @@ public class NetworkConfigTest {
     }
 
     @Test
-    public void normalize_preservesBasePath() {
-        assertEquals("https://example.com/api/",
-            NetworkConfig.normalizeBaseUrl("https://example.com/api"));
+    public void normalize_rejectsNonRootPaths() {
+        assertThrows(IllegalArgumentException.class,
+            () -> NetworkConfig.normalizeBaseUrl("https://example.com/api"));
+        assertThrows(IllegalArgumentException.class,
+            () -> NetworkConfig.normalizeBaseUrl("https://example.com/backend/"));
+        assertThrows(IllegalArgumentException.class,
+            () -> NetworkConfig.normalizeBaseUrl("https://example.com/%61pi"));
     }
 
     @Test
@@ -189,9 +193,11 @@ public final class NetworkConfig {
             throw new IllegalArgumentException("API base URL is invalid: " + value, error);
         }
         String scheme = uri.getScheme();
+        String rawPath = uri.getRawPath();
         if (scheme == null || uri.getHost() == null
-            || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))) {
-            throw new IllegalArgumentException("API base URL must use http or https and include a host");
+            || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+            || !(rawPath == null || rawPath.isEmpty() || "/".equals(rawPath))) {
+            throw new IllegalArgumentException("API base URL must use http or https, omit query and fragment, and use only the root path");
         }
         return value.endsWith("/") ? value : value + "/";
     }

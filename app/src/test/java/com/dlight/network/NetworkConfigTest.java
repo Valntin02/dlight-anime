@@ -10,9 +10,19 @@ public class NetworkConfigTest {
         assertEquals("https://example.com/", NetworkConfig.normalizeBaseUrl("  https://example.com  "));
     }
 
-    @Test
-    public void normalizeBaseUrl_preservesPath() {
-        assertEquals("https://example.com/api/", NetworkConfig.normalizeBaseUrl("https://example.com/api"));
+    @Test(expected = IllegalArgumentException.class)
+    public void normalizeBaseUrl_rejectsNonRootPath() {
+        NetworkConfig.normalizeBaseUrl("https://example.com/api");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void normalizeBaseUrl_rejectsTrailingSlashOnNonRootPath() {
+        NetworkConfig.normalizeBaseUrl("https://example.com/backend/");
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void normalizeBaseUrl_rejectsEncodedPath() {
+        NetworkConfig.normalizeBaseUrl("https://example.com/%61pi");
     }
 
     @Test

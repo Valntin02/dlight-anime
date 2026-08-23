@@ -30,12 +30,14 @@ public final class NetworkConfig {
 
         String scheme = uri.getScheme();
         int port = uri.getPort();
+        String rawPath = uri.getRawPath();
         if (scheme == null || uri.getHost() == null
             || !("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
             || uri.getRawQuery() != null || uri.getRawFragment() != null
+            || !(rawPath == null || rawPath.isEmpty() || "/".equals(rawPath))
             || port < -1 || port == 0 || port > 65535) {
             throw new IllegalArgumentException(
-                "API base URL must use http or https, include a host and valid port, and omit query and fragment"
+                "API base URL must use http or https, include a host and valid port, omit query and fragment, and use only the root path"
             );
         }
 
