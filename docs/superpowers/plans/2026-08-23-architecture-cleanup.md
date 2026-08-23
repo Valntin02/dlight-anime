@@ -21,10 +21,13 @@
 - Delete: `app/src/main/java/com/dlight/network/api/VodApi.java`
 - Modify: `app/build.gradle`
 - Modify: `app/src/test/java/com/dlight/network/HttpClientFactoryTest.java`
+- Modify: `CLAUDE.md`
+- Modify: `doc/PROJECT_STRUCTURE.md`
 
 - [ ] Confirm no production/test references outside the deletion set.
 - [ ] Delete the stack; do not delete `network/model` classes.
 - [ ] Remove `logging-interceptor` dependency. Change the client test to assert interceptor class names do not contain `HttpLoggingInterceptor`, without importing that library.
+- [ ] Update active maintenance docs to name `ApiService`, `RetrofitClient`, `NetworkConfig`, and `HttpClientFactory` as the single extension path; remove guidance for deleted types.
 - [ ] Run Debug/Release unit tests and builds plus dependency insight proving logging-interceptor is absent.
 - [ ] Commit: `refactor: remove unused duplicate API stack`.
 
