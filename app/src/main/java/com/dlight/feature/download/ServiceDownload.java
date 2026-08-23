@@ -36,28 +36,28 @@ public class ServiceDownload extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null) {
-            return START_NOT_STICKY;
+            return restartPolicy();
         }
         latestStartId.set(startId);
 
         if (DownloadContract.ACTION_PAUSE.equals(intent.getAction())) {
             pauseTask(intent.getStringExtra(DownloadContract.EXTRA_TASK_ID));
-            return START_NOT_STICKY;
+            return restartPolicy();
         }
         if (!ACTION_START.equals(intent.getAction())) {
-            return START_NOT_STICKY;
+            return restartPolicy();
         }
 
         DownloadTask task = taskFromIntent(intent);
         if (task == null) {
             Log.e(TAG, "下载参数不完整");
             stopSelfResult(startId);
-            return START_NOT_STICKY;
+            return restartPolicy();
         }
 
         if (!activeTaskIds.add(task.getTaskId())) {
             Log.d(TAG, "任务已在队列中: " + task.getTaskId());
-            return START_NOT_STICKY;
+            return restartPolicy();
         }
         pauseRequests.remove(task.getTaskId());
 
@@ -66,7 +66,7 @@ public class ServiceDownload extends Service {
             && !existing.getFilePath().isEmpty() && new File(existing.getFilePath()).exists()) {
             activeTaskIds.remove(task.getTaskId());
             broadcastUpdate(existing);
-            return START_NOT_STICKY;
+            return restartPolicy();
         }
 
         DownloadTaskStore.upsert(this, task);
@@ -76,7 +76,11 @@ public class ServiceDownload extends Service {
             NotificationUtils.build(this, task.getTitle(), 0, DownloadContract.STATUS_QUEUED));
 
         downloadQueue.execute(() -> runDownload(task));
-        return START_REDELIVER_INTENT;
+        return restartPolicy();
+    }
+
+    static int restartPolicy() {
+        return START_NOT_STICKY;
     }
 
     private DownloadTask taskFromIntent(Intent intent) {
