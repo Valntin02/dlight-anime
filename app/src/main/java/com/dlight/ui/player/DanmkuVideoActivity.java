@@ -77,6 +77,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
 
     private int currentEpisode;
     private PlayerRecoveryTracker recoveryTracker;
+    private PlayerLoadStateController playerLoadStateController;
     private retrofit2.Call<VodResModel> activeRecoveryCall;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,7 +117,10 @@ public class DanmkuVideoActivity extends AppCompatActivity {
         recoveryTracker = new PlayerRecoveryTracker(
             getIntent().getBooleanExtra("recovered_once", false)
         );
-        binding.playerLoadState.setOnRetryListener(v -> attemptRecoverPlayableSource(true));
+        playerLoadStateController = new PlayerLoadStateController(
+            binding.danmakuPlayer,
+            binding.playerLoadState
+        );
         if (videoData == null) {
             Toast.makeText(this, "视频数据为空", Toast.LENGTH_SHORT).show();
             finish();
@@ -192,7 +196,7 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             @Override
             public void onPrepared(String url, Object... objects) {
                 super.onPrepared(url, objects);
-                binding.playerLoadState.hide();
+                playerLoadStateController.hide();
                 //开始播放了才能旋转和全屏
                 orientationUtils.setEnable(binding.danmakuPlayer.isRotateWithSystem());
                 isPlay = true;
@@ -208,11 +212,13 @@ public class DanmkuVideoActivity extends AppCompatActivity {
             @Override
             public void onClickStartError(String url, Object... objects) {
                 super.onClickStartError(url, objects);
-                binding.playerLoadState.setOnRetryListener(v -> {
-                    binding.playerLoadState.hide();
-                    getCurPlay().startPlayLogic();
-                });
-                binding.playerLoadState.showError(getString(R.string.player_start_error));
+                showPlayerError();
+            }
+
+            @Override
+            public void onPlayError(String url, Object... objects) {
+                super.onPlayError(url, objects);
+                showPlayerError();
             }
 
             @Override
@@ -433,8 +439,7 @@ private void getDanmu() {
         if (activeRecoveryCall != null) {
             activeRecoveryCall.cancel();
         }
-        binding.playerLoadState.showLoading(getString(R.string.player_source_loading));
-        binding.playerLoadState.setOnRetryListener(v -> attemptRecoverPlayableSource(true));
+        playerLoadStateController.showLoading(getString(R.string.player_source_loading));
 
         ApiService apiService = RetrofitClient.getRetrofitInstance().create(ApiService.class);
         retrofit2.Call<VodResModel> call = apiService.requestRearchVodData(videoData.getVod_name());
@@ -488,8 +493,29 @@ private void getDanmu() {
     }
 
     private void showSourceRecoveryError() {
-        binding.playerLoadState.setOnRetryListener(v -> attemptRecoverPlayableSource(true));
-        binding.playerLoadState.showError(getString(R.string.player_source_error));
+        playerLoadStateController.showError(
+            getString(R.string.player_source_error),
+            () -> attemptRecoverPlayableSource(true)
+        );
+    }
+
+    private void showPlayerError() {
+        Runnable showOverlay = () -> {
+            if (isDestory || isFinishing() || isDestroyed()) {
+                return;
+            }
+            playerLoadStateController.showError(
+                getString(R.string.player_start_error),
+                () -> getCurPlay().startPlayLogic()
+            );
+        };
+
+        if (binding.danmakuPlayer.getFullWindowPlayer() != null) {
+            GSYVideoManager.backFromWindowFull(this);
+            binding.getRoot().post(showOverlay);
+            return;
+        }
+        showOverlay.run();
     }
 
     private void savePlayRecordIfNeeded(int episodeIndex) {
