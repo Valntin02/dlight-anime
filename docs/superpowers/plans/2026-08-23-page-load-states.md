@@ -69,11 +69,11 @@ Track `activeCall`, `requestGeneration`, and `selectedWeekday`. A new weekday ca
 
 - [ ] **Step 4: Implement Anime first-page and pagination states**
 
-First page/filter reset with no content shows loading. Empty first page shows empty. First-page failure shows retry error. Pagination failure keeps existing content visible, resets `flagRequest`, and must not clear the adapter. Guard null response lists. Track/cancel the active call on view destruction.
+First page/filter reset with no content shows loading. Empty first page shows empty. First-page failure shows retry error. Pagination failure keeps existing content visible and must not clear the adapter; show a resource-backed Snackbar with an explicit retry action for the same page, and dismiss it on success, filter reset, or view destruction. Guard null response lists. Track/cancel the active call on view destruction.
 
 - [ ] **Step 5: Test state decisions**
 
-Use Robolectric fragments or extract only a tiny package-visible decision helper if direct network callbacks are difficult. Tests must cover null list, empty, content, error with/without old content, weekly stale generation ignored, and pagination error preserving data.
+Use production state trackers that the Fragments call as their single source for Weekly generation/cache and Anime page/request state. Tests must cover null list, empty, content, error with/without old content, Weekly A→B stale callback/destroy invalidation/cache defensive copy, and Anime first failure retry, pagination same-page retry, success increment, filter reset, and stale callback rejection.
 
 - [ ] **Step 6: Run tests/lint/build and commit**
 
