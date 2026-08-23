@@ -63,6 +63,8 @@ Return a result enum/value object: `READY`, `CONFIRM_CELLULAR`, `OFFLINE`, `LOW_
 
 Before `startForegroundService`, run preflight. READY starts. Metered network shows one lifecycle-owned, resource-backed confirmation dialog. Positive action reruns network and storage checks with metered consent before starting; disconnects or low storage during the dialog still block. Dismiss dialogs on Fragment view/Activity destruction and prevent duplicates. OFFLINE/LOW_STORAGE/ERROR show actionable messages. Apply to detail-page new downloads and download-list resume/retry. Pause/play/delete are unaffected.
 
+`ServiceDownload` must use `START_NOT_STICKY`; Android must not redeliver a previously confirmed start Intent after network/storage conditions change. Persisted active tasks reconcile to paused on the next process start and require a new user resume/preflight.
+
 - [ ] **Step 4: Verify and commit**
 
 Run Debug/Release tests, app lint/build. Commit: `feat: confirm cellular downloads and storage`.
