@@ -15,6 +15,7 @@ public class DownloadTask {
     private String filePath;
     private String errorMessage;
     private long updatedAt;
+    private long bytesDownloaded;
     private long bytesPerSecond;
     private long etaSeconds;
 
@@ -22,13 +23,13 @@ public class DownloadTask {
                         String coverUrl, int progress, String status, String filePath,
                         String errorMessage, long updatedAt) {
         this(taskId, videoId, episode, title, url, coverUrl, progress, status, filePath,
-            errorMessage, updatedAt, 0L, -1L);
+            errorMessage, updatedAt, 0L, 0L, -1L);
     }
 
     public DownloadTask(String taskId, int videoId, int episode, String title, String url,
                         String coverUrl, int progress, String status, String filePath,
-                        String errorMessage, long updatedAt, long bytesPerSecond,
-                        long etaSeconds) {
+                        String errorMessage, long updatedAt, long bytesDownloaded,
+                        long bytesPerSecond, long etaSeconds) {
         this.taskId = safe(taskId);
         this.videoId = videoId;
         this.episode = episode;
@@ -40,6 +41,7 @@ public class DownloadTask {
         this.filePath = safe(filePath);
         this.errorMessage = safe(errorMessage);
         this.updatedAt = updatedAt;
+        this.bytesDownloaded = Math.max(0L, bytesDownloaded);
         this.bytesPerSecond = Math.max(0L, bytesPerSecond);
         this.etaSeconds = Math.max(-1L, etaSeconds);
         normalizeMetricsForStatus();
@@ -64,6 +66,7 @@ public class DownloadTask {
         json.put("filePath", filePath);
         json.put("errorMessage", errorMessage);
         json.put("updatedAt", updatedAt);
+        json.put("bytesDownloaded", bytesDownloaded);
         json.put("bytesPerSecond", bytesPerSecond);
         json.put("etaSeconds", etaSeconds);
         return json;
@@ -82,6 +85,7 @@ public class DownloadTask {
             stringValue(json, "filePath"),
             stringValue(json, "errorMessage"),
             json.optLong("updatedAt", 0L),
+            json.optLong("bytesDownloaded", 0L),
             json.optLong("bytesPerSecond", 0L),
             json.optLong("etaSeconds", -1L)
         );
@@ -142,19 +146,30 @@ public class DownloadTask {
         return bytesPerSecond;
     }
 
+    public long getBytesDownloaded() {
+        return bytesDownloaded;
+    }
+
     public long getEtaSeconds() {
         return etaSeconds;
     }
 
-    public void setTransferMetrics(long bytesPerSecond, long etaSeconds) {
-        this.bytesPerSecond = Math.max(0L, bytesPerSecond);
-        this.etaSeconds = Math.max(-1L, etaSeconds);
+    public void setTransferMetrics(long bytesDownloaded, long bytesPerSecond, long etaSeconds) {
+        if (DownloadContract.STATUS_DOWNLOADING.equals(status)) {
+            this.bytesDownloaded = Math.max(0L, bytesDownloaded);
+            this.bytesPerSecond = Math.max(0L, bytesPerSecond);
+            this.etaSeconds = Math.max(-1L, etaSeconds);
+        }
         normalizeMetricsForStatus();
         touch();
     }
 
     private void normalizeMetricsForStatus() {
-        if (DownloadContract.STATUS_COMPLETED.equals(status)) {
+        if (DownloadContract.STATUS_QUEUED.equals(status)) {
+            bytesDownloaded = 0L;
+            bytesPerSecond = 0L;
+            etaSeconds = -1L;
+        } else if (DownloadContract.STATUS_COMPLETED.equals(status)) {
             progress = 100;
             bytesPerSecond = 0L;
             etaSeconds = 0L;

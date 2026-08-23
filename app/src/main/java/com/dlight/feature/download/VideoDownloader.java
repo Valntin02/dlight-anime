@@ -45,8 +45,17 @@ public class VideoDownloader {
         void onFailure(Exception e);
         default void onPaused() {
         }
-        default void onMetrics(int progress, long bytesPerSecond, long etaSeconds) {
+        default void onPaused(int progress, long bytesDownloaded, long bytesPerSecond,
+                long etaSeconds) {
+            onPaused();
+        }
+        default void onMetrics(int progress, long bytesDownloaded, long bytesPerSecond,
+                long etaSeconds) {
             onProgress(progress);
+        }
+        default void onFailure(Exception error, int progress, long bytesDownloaded,
+                long bytesPerSecond, long etaSeconds) {
+            onFailure(error);
         }
     }
 
@@ -165,6 +174,7 @@ public class VideoDownloader {
         TransferController transferController = null;
         CountDownLatch workerLatch = null;
         File videoTempDir = null;
+        DownloadProgressMetrics progressMetrics = null;
         boolean terminalCallbackStarted = false;
         try {
             if (m3u8Url == null || m3u8Url.trim().isEmpty()) {
@@ -200,6 +210,7 @@ public class VideoDownloader {
             long existingBytes = existingSegmentBytes(taskTempDir, totalTsFiles);
             DownloadProgressMetrics metrics = new DownloadProgressMetrics(totalTsFiles,
                     () -> TimeUnit.NANOSECONDS.toMillis(System.nanoTime()));
+            progressMetrics = metrics;
             metrics.reset(existingSegments, existingBytes);
             MetricsReporter metricsReporter = new MetricsReporter(callback);
             executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
@@ -216,10 +227,9 @@ public class VideoDownloader {
                             return;
                         }
                         throwIfPaused(pauseSignal);
-                        long segmentBytes = downloadSegment(tsUrl,
+                        downloadSegment(tsUrl,
                                 new File(taskTempDir, index + ".ts"), pauseSignal,
                                 allowPrivate, taskController, metrics, metricsReporter);
-                        metricsReporter.report(metrics.segmentCompleted(segmentBytes));
                     } catch (Exception e) {
                         if (failure.compareAndSet(null, e)) {
                             taskController.cancelAll();
@@ -230,7 +240,7 @@ public class VideoDownloader {
                 });
             }
             if (existingSegments > 0) {
-                callback.onProgress((int) ((existingSegments * 100.0) / totalTsFiles));
+                metricsReporter.report(metrics.snapshot());
             }
             startGate.countDown();
 
@@ -249,18 +259,18 @@ public class VideoDownloader {
         } catch (DownloadPausedException e) {
             cancelAndAwait(transferController, workerLatch);
             if (!terminalCallbackStarted) {
-                callback.onPaused();
+                publishPaused(callback, progressMetrics);
             }
         } catch (InterruptedException e) {
             cancelAndAwait(transferController, workerLatch);
             Thread.currentThread().interrupt();
             if (!terminalCallbackStarted) {
-                callback.onFailure(e);
+                publishFailure(callback, progressMetrics, e);
             }
         } catch (Exception e) {
             cancelAndAwait(transferController, workerLatch);
             if (!terminalCallbackStarted) {
-                callback.onFailure(e);
+                publishFailure(callback, progressMetrics, e);
             }
         } finally {
             if (executorService != null && !executorService.isTerminated()) {
@@ -290,6 +300,9 @@ public class VideoDownloader {
         IOException lastError = null;
         for (int attempt = 1; attempt <= 3; attempt++) {
             File partFile = segmentPartFile(destination);
+            DownloadProgressMetrics.Attempt metricsAttempt =
+                    metrics == null ? null : metrics.beginAttempt();
+            boolean attemptFinished = false;
             try {
                 deleteIfExists(partFile);
                 throwIfPaused(pauseSignal);
@@ -300,8 +313,15 @@ public class VideoDownloader {
                     if (body == null) {
                         throw new IOException("视频分片响应内容为空");
                     }
-                    return writeSegment(body.byteStream(), destination, pauseSignal,
-                            metrics, metricsReporter);
+                    long copiedBytes = writeSegment(body.byteStream(), destination, pauseSignal,
+                            metrics, metricsAttempt, metricsReporter);
+                    if (metrics != null) {
+                        DownloadProgressMetrics.Snapshot snapshot =
+                                metrics.segmentCompleted(metricsAttempt, copiedBytes);
+                        attemptFinished = true;
+                        metricsReporter.report(snapshot);
+                    }
+                    return copiedBytes;
                 }
             } catch (DownloadPausedException e) {
                 throw e;
@@ -316,6 +336,9 @@ public class VideoDownloader {
                     }
                 }
             } finally {
+                if (metrics != null && !attemptFinished) {
+                    metricsReporter.report(metrics.attemptFailed(metricsAttempt));
+                }
                 deleteIfExists(partFile);
             }
         }
@@ -324,16 +347,29 @@ public class VideoDownloader {
 
     static void writeSegment(InputStream input, File destination, PauseSignal pauseSignal)
             throws IOException {
-        writeSegment(input, destination, pauseSignal, null);
+        writeSegment(input, destination, pauseSignal, null, null, null);
     }
 
     static long writeSegment(InputStream input, File destination, PauseSignal pauseSignal,
             DownloadProgressMetrics metrics) throws IOException {
-        return writeSegment(input, destination, pauseSignal, metrics, null);
+        DownloadProgressMetrics.Attempt attempt = metrics.beginAttempt();
+        boolean completed = false;
+        try {
+            long copiedBytes = writeSegment(input, destination, pauseSignal, metrics, attempt,
+                    null);
+            metrics.segmentCompleted(attempt, copiedBytes);
+            completed = true;
+            return copiedBytes;
+        } finally {
+            if (!completed) {
+                metrics.attemptFailed(attempt);
+            }
+        }
     }
 
     private static long writeSegment(InputStream input, File destination, PauseSignal pauseSignal,
-            DownloadProgressMetrics metrics, MetricsReporter metricsReporter) throws IOException {
+            DownloadProgressMetrics metrics, DownloadProgressMetrics.Attempt attempt,
+            MetricsReporter metricsReporter) throws IOException {
         File partFile = segmentPartFile(destination);
         deleteIfExists(partFile);
         boolean published = false;
@@ -348,7 +384,8 @@ public class VideoDownloader {
                     out.write(buffer, 0, count);
                     copiedBytes = saturatedAdd(copiedBytes, count);
                     if (metrics != null) {
-                        DownloadProgressMetrics.Snapshot snapshot = metrics.recordBytes(count);
+                        DownloadProgressMetrics.Snapshot snapshot =
+                                metrics.recordBytes(attempt, count);
                         if (metricsReporter != null) {
                             metricsReporter.report(snapshot);
                         }
@@ -367,6 +404,28 @@ public class VideoDownloader {
 
     private static long saturatedAdd(long left, long right) {
         return left > Long.MAX_VALUE - right ? Long.MAX_VALUE : left + right;
+    }
+
+    private static void publishPaused(DownloadCallback callback,
+            DownloadProgressMetrics metrics) {
+        if (metrics == null) {
+            callback.onPaused();
+            return;
+        }
+        DownloadProgressMetrics.Snapshot snapshot = metrics.snapshot();
+        callback.onPaused(snapshot.getProgress(), snapshot.getDownloadedBytes(),
+                snapshot.getBytesPerSecond(), snapshot.getEtaSeconds());
+    }
+
+    private static void publishFailure(DownloadCallback callback,
+            DownloadProgressMetrics metrics, Exception error) {
+        if (metrics == null) {
+            callback.onFailure(error);
+            return;
+        }
+        DownloadProgressMetrics.Snapshot snapshot = metrics.snapshot();
+        callback.onFailure(error, snapshot.getProgress(), snapshot.getDownloadedBytes(),
+                snapshot.getBytesPerSecond(), snapshot.getEtaSeconds());
     }
 
     private static long existingSegmentBytes(File directory, int totalSegments) {
@@ -393,8 +452,8 @@ public class VideoDownloader {
                 return;
             }
             lastSequence = snapshot.getSequence();
-            callback.onMetrics(snapshot.getProgress(), snapshot.getBytesPerSecond(),
-                    snapshot.getEtaSeconds());
+            callback.onMetrics(snapshot.getProgress(), snapshot.getDownloadedBytes(),
+                    snapshot.getBytesPerSecond(), snapshot.getEtaSeconds());
         }
     }
 

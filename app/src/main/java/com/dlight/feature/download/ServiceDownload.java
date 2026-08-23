@@ -101,7 +101,7 @@ public class ServiceDownload extends Service {
         }
         task.setStatus(DownloadContract.STATUS_DOWNLOADING);
         task.setProgress(0);
-        task.setTransferMetrics(0L, -1L);
+        task.setTransferMetrics(0L, 0L, -1L);
         task.setErrorMessage("");
         publish(task);
 
@@ -124,13 +124,14 @@ public class ServiceDownload extends Service {
                 }
 
                 @Override
-                public void onMetrics(int progress, long bytesPerSecond, long etaSeconds) {
+                public void onMetrics(int progress, long bytesDownloaded, long bytesPerSecond,
+                        long etaSeconds) {
                     synchronized (task) {
                         if (pauseRequests.contains(task.getTaskId()) || !task.isActive()) {
                             return;
                         }
                         task.setProgress(progress);
-                        task.setTransferMetrics(bytesPerSecond, etaSeconds);
+                        task.setTransferMetrics(bytesDownloaded, bytesPerSecond, etaSeconds);
                         publish(task);
                     }
                 }
@@ -154,8 +155,28 @@ public class ServiceDownload extends Service {
                 }
 
                 @Override
+                public void onFailure(Exception error, int progress, long bytesDownloaded,
+                        long bytesPerSecond, long etaSeconds) {
+                    synchronized (task) {
+                        task.setProgress(progress);
+                        task.setTransferMetrics(bytesDownloaded, bytesPerSecond, etaSeconds);
+                    }
+                    onFailure(error);
+                }
+
+                @Override
                 public void onPaused() {
                     markPaused(task);
+                }
+
+                @Override
+                public void onPaused(int progress, long bytesDownloaded, long bytesPerSecond,
+                        long etaSeconds) {
+                    synchronized (task) {
+                        task.setProgress(progress);
+                        task.setTransferMetrics(bytesDownloaded, bytesPerSecond, etaSeconds);
+                    }
+                    onPaused();
                 }
             });
 

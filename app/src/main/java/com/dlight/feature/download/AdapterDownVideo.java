@@ -52,7 +52,8 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
             holder.status.setText(holder.itemView.getContext().getString(
                     R.string.download_status_downloading, task.getProgress(),
                     formatSpeed(holder, task.getBytesPerSecond()),
-                    formatEta(holder, task.getEtaSeconds())));
+                    holder.itemView.getContext().getString(R.string.download_remaining,
+                            formatEta(holder, task.getEtaSeconds()))));
             holder.progress.setVisibility(View.VISIBLE);
             holder.progress.setIndeterminate(false);
             holder.progress.setProgress(task.getProgress());
@@ -107,12 +108,14 @@ public class AdapterDownVideo extends RecyclerView.Adapter<AdapterDownVideo.Vide
         if (etaSeconds < 0L) {
             return holder.itemView.getContext().getString(R.string.download_eta_calculating);
         }
-        if (etaSeconds >= 60L) {
+        long seconds = etaSeconds % 60L;
+        long totalMinutes = etaSeconds / 60L;
+        if (etaSeconds < 3600L) {
             return holder.itemView.getContext().getString(
-                    R.string.download_eta_minutes,
-                    etaSeconds / 60L + (etaSeconds % 60L == 0L ? 0L : 1L));
+                    R.string.download_eta_mm_ss, totalMinutes, seconds);
         }
-        return holder.itemView.getContext().getString(R.string.download_eta_seconds, etaSeconds);
+        return holder.itemView.getContext().getString(R.string.download_eta_hh_mm_ss,
+                totalMinutes / 60L, totalMinutes % 60L, seconds);
     }
 
     static class VideoViewHolder extends RecyclerView.ViewHolder {

@@ -15,13 +15,14 @@
     <string name="player_source_error">暂无可播放地址，请重试</string>
     <string name="player_start_error">播放失败，请重试</string>
     <string name="download_status_queued">等待下载 · 点击暂停</string>
-    <string name="download_status_downloading">下载中 %1$d%% · %2$s · 剩余 %3$s · 点击暂停</string>
+    <string name="download_status_downloading">下载中 %1$d%% · %2$s · %3$s · 点击暂停</string>
     <string name="download_status_paused">已暂停 %1$d%% · 点击继续</string>
     <string name="download_status_completed">已缓存 · 点击播放</string>
     <string name="download_status_failed">下载失败 · 点击重试\n%1$s</string>
     <string name="download_speed_kib">%1$.1f KiB/s</string>
     <string name="download_speed_mib">%1$.1f MiB/s</string>
+    <string name="download_remaining">剩余 %1$s</string>
     <string name="download_eta_calculating">计算中</string>
-    <string name="download_eta_seconds">%1$d 秒</string>
-    <string name="download_eta_minutes">约 %1$d 分钟</string>
+    <string name="download_eta_mm_ss">%1$02d:%2$02d</string>
+    <string name="download_eta_hh_mm_ss">%1$d:%2$02d:%3$02d</string>
 </resources>

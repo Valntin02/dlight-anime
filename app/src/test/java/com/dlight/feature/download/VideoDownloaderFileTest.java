@@ -54,7 +54,7 @@ public class VideoDownloaderFileTest {
 
         long copied = VideoDownloader.writeSegment(
                 new ByteArrayInputStream(bytes("actual bytes")), destination, null, metrics);
-        DownloadProgressMetrics.Snapshot snapshot = metrics.segmentCompleted(copied);
+        DownloadProgressMetrics.Snapshot snapshot = metrics.snapshot();
 
         assertEquals(bytes("actual bytes").length, copied);
         assertEquals(bytes("actual bytes").length, snapshot.getDownloadedBytes());
@@ -79,7 +79,7 @@ public class VideoDownloaderFileTest {
             }
         };
 
-        callback.onMetrics(37, 1024L, 9L);
+        callback.onMetrics(37, 4096L, 1024L, 9L);
 
         assertEquals(37, progress.get());
     }
@@ -115,7 +115,7 @@ public class VideoDownloaderFileTest {
 
         long copied = VideoDownloader.writeSegment(new ByteArrayInputStream(bytes("kept")),
                 completed, null, metrics);
-        DownloadProgressMetrics.Snapshot snapshot = metrics.segmentCompleted(copied);
+        DownloadProgressMetrics.Snapshot snapshot = metrics.snapshot();
 
         assertEquals(bytes("discarded").length + bytes("kept").length,
                 snapshot.getDownloadedBytes());
@@ -493,6 +493,8 @@ public class VideoDownloaderFileTest {
 
             assertFalse(downloadThread.isAlive());
             assertTrue(callback.failure.get() instanceof InterruptedException);
+            assertEquals(50, callback.finalProgress.get());
+            assertEquals(bytes("verified").length, callback.finalBytes.get().longValue());
             assertEquals(progressAtTerminal, callback.progress.get());
             assertEquals(1, callback.terminals.get());
             assertTrue(taskDirectory.exists());
@@ -796,6 +798,8 @@ public class VideoDownloaderFileTest {
         private final AtomicInteger metrics = new AtomicInteger();
         private final AtomicInteger metricsAfterTerminal = new AtomicInteger();
         private final AtomicInteger terminals = new AtomicInteger();
+        private final AtomicInteger finalProgress = new AtomicInteger(-1);
+        private final AtomicReference<Long> finalBytes = new AtomicReference<>(-1L);
 
         @Override
         public void onProgress(int progress) {
@@ -803,7 +807,8 @@ public class VideoDownloaderFileTest {
         }
 
         @Override
-        public void onMetrics(int progress, long bytesPerSecond, long etaSeconds) {
+        public void onMetrics(int progress, long bytesDownloaded, long bytesPerSecond,
+                long etaSeconds) {
             if (terminals.get() > 0) {
                 metricsAfterTerminal.incrementAndGet();
             }
@@ -824,9 +829,25 @@ public class VideoDownloaderFileTest {
         }
 
         @Override
+        public void onFailure(Exception error, int progress, long bytesDownloaded,
+                long bytesPerSecond, long etaSeconds) {
+            finalProgress.set(progress);
+            finalBytes.set(bytesDownloaded);
+            onFailure(error);
+        }
+
+        @Override
         public void onPaused() {
             paused.incrementAndGet();
             terminals.incrementAndGet();
+        }
+
+        @Override
+        public void onPaused(int progress, long bytesDownloaded, long bytesPerSecond,
+                long etaSeconds) {
+            finalProgress.set(progress);
+            finalBytes.set(bytesDownloaded);
+            onPaused();
         }
     }
 

@@ -1,11 +1,19 @@
 package com.dlight.feature.download;
 
+import java.util.IdentityHashMap;
+import java.util.Map;
+
 /** Thread-safe transfer metrics for downloads whose total byte size is initially unknown. */
 public final class DownloadProgressMetrics {
     private static final long EMIT_INTERVAL_MILLIS = 1000L;
 
     public interface Clock {
         long nowMillis();
+    }
+
+    public static final class Attempt {
+        private Attempt() {
+        }
     }
 
     public static final class Snapshot {
@@ -47,6 +55,7 @@ public final class DownloadProgressMetrics {
 
     private final int totalSegments;
     private final Clock clock;
+    private final Map<Attempt, Long> inFlightBytes = new IdentityHashMap<>();
     private int completedSegments;
     private long downloadedBytes;
     private long completedBytes;
@@ -54,7 +63,6 @@ public final class DownloadProgressMetrics {
     private long sampleTimeMillis;
     private long lastEmitTimeMillis;
     private long bytesPerSecond;
-    private int lastProgress;
     private long sequence;
 
     public DownloadProgressMetrics(int totalSegments, Clock clock) {
@@ -71,34 +79,67 @@ public final class DownloadProgressMetrics {
         sampleTimeMillis = clock.nowMillis();
         lastEmitTimeMillis = sampleTimeMillis;
         bytesPerSecond = 0L;
-        lastProgress = (int) ((completedSegments * 100L) / totalSegments);
         sequence = 0L;
+        inFlightBytes.clear();
     }
 
-    public synchronized Snapshot recordBytes(long byteCount) {
-        if (byteCount > 0L) {
-            downloadedBytes = saturatedAdd(downloadedBytes, byteCount);
-        }
-        long now = clock.nowMillis();
-        if (elapsed(now, lastEmitTimeMillis) < EMIT_INTERVAL_MILLIS) {
+    public synchronized Attempt beginAttempt() {
+        Attempt attempt = new Attempt();
+        inFlightBytes.put(attempt, 0L);
+        return attempt;
+    }
+
+    public synchronized Snapshot recordBytes(Attempt attempt, long byteCount) {
+        if (!inFlightBytes.containsKey(attempt)) {
             return null;
         }
-        lastEmitTimeMillis = now;
-        updateSpeed(now);
-        return snapshot();
+        if (byteCount > 0L) {
+            downloadedBytes = saturatedAdd(downloadedBytes, byteCount);
+            inFlightBytes.put(attempt,
+                    saturatedAdd(inFlightBytes.get(attempt), byteCount));
+        }
+        return throttledSnapshot();
     }
 
-    public synchronized Snapshot segmentCompleted(long segmentBytes) {
+    public synchronized Snapshot attemptFailed(Attempt attempt) {
+        if (inFlightBytes.remove(attempt) == null) {
+            return null;
+        }
+        return throttledSnapshot();
+    }
+
+    public synchronized Snapshot segmentCompleted(Attempt attempt, long segmentBytes) {
+        if (inFlightBytes.remove(attempt) == null) {
+            return null;
+        }
         if (completedSegments < totalSegments) {
             completedSegments++;
         }
         if (segmentBytes > 0L) {
             completedBytes = saturatedAdd(completedBytes, segmentBytes);
         }
+        return forceSnapshot();
+    }
+
+    public synchronized Snapshot snapshot() {
+        return createSnapshot();
+    }
+
+    private Snapshot forceSnapshot() {
         long now = clock.nowMillis();
         lastEmitTimeMillis = now;
         updateSpeed(now);
-        return snapshot();
+        return createSnapshot();
+    }
+
+    private Snapshot throttledSnapshot() {
+        long now = clock.nowMillis();
+        if (elapsed(now, lastEmitTimeMillis) < EMIT_INTERVAL_MILLIS) {
+            return null;
+        }
+        lastEmitTimeMillis = now;
+        updateSpeed(now);
+        return createSnapshot();
     }
 
     private void updateSpeed(long now) {
@@ -112,16 +153,16 @@ public final class DownloadProgressMetrics {
         sampleTimeMillis = now;
     }
 
-    private Snapshot snapshot() {
-        int progress = Math.max(lastProgress, estimateProgress());
-        lastProgress = progress;
-        long eta = estimateEta(progress);
+    private Snapshot createSnapshot() {
+        long validBytes = saturatedAdd(completedBytes, inFlightByteCount());
+        int progress = estimateProgress(validBytes);
+        long eta = estimateEta(progress, validBytes);
         sequence = saturatedAdd(sequence, 1L);
         return new Snapshot(progress, downloadedBytes, Math.max(0L, bytesPerSecond), eta,
                 sequence);
     }
 
-    private int estimateProgress() {
+    private int estimateProgress(long validBytes) {
         if (completedSegments >= totalSegments) {
             return 100;
         }
@@ -129,11 +170,11 @@ public final class DownloadProgressMetrics {
             return 0;
         }
         double estimatedTotal = ((double) completedBytes * totalSegments) / completedSegments;
-        int value = (int) Math.floor((completedBytes * 100.0d) / estimatedTotal);
+        int value = (int) Math.floor((validBytes * 100.0d) / estimatedTotal);
         return Math.max(0, Math.min(99, value));
     }
 
-    private long estimateEta(int progress) {
+    private long estimateEta(int progress, long validBytes) {
         if (progress >= 100) {
             return 0L;
         }
@@ -141,12 +182,20 @@ public final class DownloadProgressMetrics {
             return -1L;
         }
         double estimatedTotal = ((double) completedBytes * totalSegments) / completedSegments;
-        double remaining = Math.max(0.0d, estimatedTotal - completedBytes);
+        double remaining = Math.max(0.0d, estimatedTotal - validBytes);
         double seconds = Math.ceil(remaining / bytesPerSecond);
         if (!Double.isFinite(seconds) || seconds >= Long.MAX_VALUE) {
             return Long.MAX_VALUE;
         }
         return Math.max(0L, (long) seconds);
+    }
+
+    private long inFlightByteCount() {
+        long total = 0L;
+        for (long bytes : inFlightBytes.values()) {
+            total = saturatedAdd(total, bytes);
+        }
+        return total;
     }
 
     private static long elapsed(long now, long earlier) {

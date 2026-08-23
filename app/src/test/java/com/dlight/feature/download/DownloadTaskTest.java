@@ -16,7 +16,7 @@ public class DownloadTaskTest {
         DownloadTask original = new DownloadTask(
             "42:3", 42, 3, "title", "https://example.com/video.m3u8",
             "https://example.com/cover.jpg", 67, DownloadContract.STATUS_DOWNLOADING,
-            "/downloads/video.mp4", "network error", 123456789L, 2048L, 30L
+            "/downloads/video.mp4", "network error", 123456789L, 8192L, 2048L, 30L
         );
 
         DownloadTask restored = DownloadTask.fromJson(original.toJson());
@@ -32,6 +32,7 @@ public class DownloadTaskTest {
         assertEquals("/downloads/video.mp4", restored.getFilePath());
         assertEquals("network error", restored.getErrorMessage());
         assertEquals(123456789L, restored.getUpdatedAt());
+        assertEquals(8192L, restored.getBytesDownloaded());
         assertEquals(2048L, restored.getBytesPerSecond());
         assertEquals(30L, restored.getEtaSeconds());
     }
@@ -106,6 +107,7 @@ public class DownloadTaskTest {
         assertEquals("", task.getErrorMessage());
         assertEquals(0L, task.getUpdatedAt());
         assertEquals(0L, task.getBytesPerSecond());
+        assertEquals(0L, task.getBytesDownloaded());
         assertEquals(-1L, task.getEtaSeconds());
     }
 
@@ -130,6 +132,7 @@ public class DownloadTaskTest {
         assertFalse(task.isPaused());
         assertFalse(task.isCompleted());
         assertEquals(0L, task.getBytesPerSecond());
+        assertEquals(0L, task.getBytesDownloaded());
         assertEquals(-1L, task.getEtaSeconds());
     }
 
@@ -137,22 +140,31 @@ public class DownloadTaskTest {
     public void transferMetricsAreClampedAndResetForTerminalOrPausedStates() {
         DownloadTask task = taskWithStatus(DownloadContract.STATUS_DOWNLOADING, 1L);
 
-        task.setTransferMetrics(-100L, -2L);
+        task.setTransferMetrics(-10L, -100L, -2L);
+        assertEquals(0L, task.getBytesDownloaded());
         assertEquals(0L, task.getBytesPerSecond());
         assertEquals(-1L, task.getEtaSeconds());
 
-        task.setTransferMetrics(4096L, 12L);
+        task.setTransferMetrics(10_000L, 4096L, 12L);
         task.setStatus(DownloadContract.STATUS_PAUSED);
+        assertEquals(10_000L, task.getBytesDownloaded());
         assertEquals(0L, task.getBytesPerSecond());
         assertEquals(-1L, task.getEtaSeconds());
-        task.setTransferMetrics(8192L, 6L);
+        task.setTransferMetrics(20_000L, 8192L, 6L);
+        assertEquals(10_000L, task.getBytesDownloaded());
         assertEquals(0L, task.getBytesPerSecond());
         assertEquals(-1L, task.getEtaSeconds());
 
         task.setStatus(DownloadContract.STATUS_COMPLETED);
+        assertEquals(10_000L, task.getBytesDownloaded());
         assertEquals(100, task.getProgress());
         assertEquals(0L, task.getBytesPerSecond());
         assertEquals(0L, task.getEtaSeconds());
+
+        task.setStatus(DownloadContract.STATUS_QUEUED);
+        assertEquals(0L, task.getBytesDownloaded());
+        assertEquals(0L, task.getBytesPerSecond());
+        assertEquals(-1L, task.getEtaSeconds());
     }
 
     @Test

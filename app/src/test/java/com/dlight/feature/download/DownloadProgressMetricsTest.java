@@ -2,60 +2,170 @@ package com.dlight.feature.download;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 public class DownloadProgressMetricsTest {
     @Test
-    public void throttleEstimateResetAndSaturate() {
+    public void resetEstablishesZeroOrExistingBaseline() {
         FakeClock clock = new FakeClock();
         DownloadProgressMetrics metrics = new DownloadProgressMetrics(4, clock);
 
-        assertNull(metrics.recordBytes(-1L));
-        assertNull(metrics.recordBytes(400L));
-        clock.advance(999L);
-        assertNull(metrics.recordBytes(599L));
-        clock.advance(1L);
-        DownloadProgressMetrics.Snapshot timed = metrics.recordBytes(1L);
-        assertEquals(1000L, timed.getDownloadedBytes());
-        assertEquals(1000L, timed.getBytesPerSecond());
-        assertEquals(0, timed.getProgress());
-        assertEquals(-1L, timed.getEtaSeconds());
-
-        DownloadProgressMetrics.Snapshot completed = metrics.segmentCompleted(1000L);
-        assertEquals(25, completed.getProgress());
-        assertEquals(3L, completed.getEtaSeconds());
-
-        metrics.reset(1, Long.MAX_VALUE - 5L);
-        metrics.recordBytes(10L);
-        DownloadProgressMetrics.Snapshot saturated = metrics.segmentCompleted(Long.MAX_VALUE);
-        assertEquals(Long.MAX_VALUE, saturated.getDownloadedBytes());
-        assertTrue(saturated.getBytesPerSecond() >= 0L);
-        assertTrue(saturated.getEtaSeconds() >= -1L);
+        assertSnapshot(metrics.snapshot(), 0, 0L, 0L, -1L);
+        metrics.reset(1, 1000L);
+        assertSnapshot(metrics.snapshot(), 25, 1000L, 0L, -1L);
     }
 
     @Test
-    public void recordsBytesSafelyFromConcurrentSegments() throws Exception {
-        FakeClock clock = new FakeClock();
-        DownloadProgressMetrics metrics = new DownloadProgressMetrics(1, clock);
-        Thread first = new Thread(() -> recordBytes(metrics, 10_000));
-        Thread second = new Thread(() -> recordBytes(metrics, 10_000));
+    public void transferredBytesAreNondecreasingAndSaturate() {
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(1, () -> 0L);
+        DownloadProgressMetrics.Attempt attempt = metrics.beginAttempt();
 
-        first.start();
-        second.start();
-        first.join();
-        second.join();
+        metrics.recordBytes(attempt, -1L);
+        metrics.recordBytes(attempt, Long.MAX_VALUE - 1L);
+        metrics.recordBytes(attempt, 10L);
 
-        DownloadProgressMetrics.Snapshot snapshot = metrics.segmentCompleted(20_000L);
-        assertEquals(20_000L, snapshot.getDownloadedBytes());
-        assertEquals(100, snapshot.getProgress());
+        assertEquals(Long.MAX_VALUE, metrics.snapshot().getDownloadedBytes());
     }
 
-    private static void recordBytes(DownloadProgressMetrics metrics, int count) {
+    @Test
+    public void unknownAverageAvoidsDivideByZero() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(2, clock);
+        DownloadProgressMetrics.Attempt attempt = metrics.beginAttempt();
+        clock.advance(1000L);
+
+        DownloadProgressMetrics.Snapshot snapshot = metrics.recordBytes(attempt, 500L);
+
+        assertSnapshot(snapshot, 0, 500L, 500L, -1L);
+    }
+
+    @Test
+    public void rateCalculationSaturatesAfterRealClockAdvance() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(1, clock);
+        DownloadProgressMetrics.Attempt attempt = metrics.beginAttempt();
+        clock.advance(1000L);
+
+        DownloadProgressMetrics.Snapshot snapshot =
+                metrics.recordBytes(attempt, Long.MAX_VALUE);
+
+        assertEquals(Long.MAX_VALUE, snapshot.getBytesPerSecond());
+    }
+
+    @Test
+    public void etaCalculationSaturates() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(Integer.MAX_VALUE, clock);
+        DownloadProgressMetrics.Attempt attempt = metrics.beginAttempt();
+        clock.advance(1000L);
+        metrics.recordBytes(attempt, 1L);
+
+        DownloadProgressMetrics.Snapshot snapshot =
+                metrics.segmentCompleted(attempt, Long.MAX_VALUE);
+
+        assertEquals(Long.MAX_VALUE, snapshot.getEtaSeconds());
+    }
+
+    @Test
+    public void byteUpdatesAreThrottledToOncePerSecond() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(2, clock);
+        DownloadProgressMetrics.Attempt attempt = metrics.beginAttempt();
+
+        assertNull(metrics.recordBytes(attempt, 400L));
+        clock.advance(999L);
+        assertNull(metrics.recordBytes(attempt, 599L));
+        clock.advance(1L);
+        assertEquals(1000L, metrics.recordBytes(attempt, 1L).getDownloadedBytes());
+    }
+
+    @Test
+    public void validInFlightBytesAdvanceProgressAndEta() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(2, clock);
+        DownloadProgressMetrics.Attempt first = metrics.beginAttempt();
+        clock.advance(1000L);
+        metrics.recordBytes(first, 1000L);
+        metrics.segmentCompleted(first, 1000L);
+        DownloadProgressMetrics.Attempt second = metrics.beginAttempt();
+        clock.advance(1000L);
+
+        DownloadProgressMetrics.Snapshot snapshot = metrics.recordBytes(second, 500L);
+
+        assertSnapshot(snapshot, 75, 1500L, 500L, 1L);
+    }
+
+    @Test
+    public void failedAttemptRollsBackValidProgressButNotTransferredBytes() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(2, clock);
+        DownloadProgressMetrics.Attempt first = metrics.beginAttempt();
+        clock.advance(1000L);
+        metrics.recordBytes(first, 1000L);
+        metrics.segmentCompleted(first, 1000L);
+        DownloadProgressMetrics.Attempt failed = metrics.beginAttempt();
+        clock.advance(1000L);
+        assertEquals(75, metrics.recordBytes(failed, 500L).getProgress());
+
+        assertNull(metrics.attemptFailed(failed));
+        DownloadProgressMetrics.Snapshot corrected = metrics.snapshot();
+
+        assertSnapshot(corrected, 50, 1500L, 500L, 2L);
+    }
+
+    @Test
+    public void concurrentAttemptsRemainIndependent() throws Exception {
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(2, () -> 0L);
+        DownloadProgressMetrics.Attempt first = metrics.beginAttempt();
+        DownloadProgressMetrics.Attempt second = metrics.beginAttempt();
+        Thread firstThread = new Thread(() -> record(metrics, first, 10_000));
+        Thread secondThread = new Thread(() -> record(metrics, second, 20_000));
+
+        firstThread.start();
+        secondThread.start();
+        firstThread.join(5000L);
+        secondThread.join(5000L);
+        assertEquals(false, firstThread.isAlive());
+        assertEquals(false, secondThread.isAlive());
+        metrics.segmentCompleted(first, 10_000L);
+        DownloadProgressMetrics.Snapshot completed =
+                metrics.segmentCompleted(second, 20_000L);
+
+        assertSnapshot(completed, 100, 30_000L, 0L, 0L);
+    }
+
+    @Test
+    public void concurrentAttemptFailuresShareTheThrottleWindow() {
+        FakeClock clock = new FakeClock();
+        DownloadProgressMetrics metrics = new DownloadProgressMetrics(3, clock);
+        DownloadProgressMetrics.Attempt completed = metrics.beginAttempt();
+        metrics.recordBytes(completed, 1000L);
+        metrics.segmentCompleted(completed, 1000L);
+        DownloadProgressMetrics.Attempt first = metrics.beginAttempt();
+        DownloadProgressMetrics.Attempt second = metrics.beginAttempt();
+        metrics.recordBytes(first, 500L);
+        metrics.recordBytes(second, 500L);
+        clock.advance(1000L);
+
+        assertEquals(50, metrics.attemptFailed(first).getProgress());
+        assertNull(metrics.attemptFailed(second));
+        assertEquals(33, metrics.snapshot().getProgress());
+    }
+
+    private static void record(DownloadProgressMetrics metrics,
+            DownloadProgressMetrics.Attempt attempt, int count) {
         for (int i = 0; i < count; i++) {
-            metrics.recordBytes(1L);
+            metrics.recordBytes(attempt, 1L);
         }
+    }
+
+    private static void assertSnapshot(DownloadProgressMetrics.Snapshot snapshot, int progress,
+            long downloadedBytes, long bytesPerSecond, long etaSeconds) {
+        assertEquals(progress, snapshot.getProgress());
+        assertEquals(downloadedBytes, snapshot.getDownloadedBytes());
+        assertEquals(bytesPerSecond, snapshot.getBytesPerSecond());
+        assertEquals(etaSeconds, snapshot.getEtaSeconds());
     }
 
     private static final class FakeClock implements DownloadProgressMetrics.Clock {
