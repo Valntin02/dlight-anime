@@ -42,4 +42,12 @@ jobs:
       - name: Scan tracked secrets and obsolete dependencies
         run: |
           test -z "$(git ls-files '*.jks' '*.keystore')"
-          ! git grep -nE "storePassword[[:space:]]+['\"]|keyPassword[[:space:]]+['\"]|com\\.squareup\\.picasso|com\\.android\\.support" -- app gradle build.gradle
+          if git grep -qE "storePassword[[:space:]]+['\"]|keyPassword[[:space:]]+['\"]" -- app gradle build.gradle; then
+            echo '::error::Tracked Gradle files contain an embedded signing password.'
+            exit 1
+          fi
+          if git grep -qE 'com\.squareup\.picasso|com\.android\.support' -- '*.gradle'; then
+            echo '::error::Tracked Gradle files contain an obsolete image/support dependency.'
+            exit 1
+          fi
+          python3 scripts/check_gradle_dependency_versions.py
