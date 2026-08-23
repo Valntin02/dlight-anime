@@ -1,6 +1,7 @@
 package com.dlight.network;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 
@@ -13,7 +14,6 @@ import java.util.List;
 
 import okhttp3.Interceptor;
 import okhttp3.OkHttpClient;
-import okhttp3.logging.HttpLoggingInterceptor;
 
 public class HttpClientFactoryTest {
     @Test
@@ -36,8 +36,8 @@ public class HttpClientFactoryTest {
 
     @Test
     public void clients_haveNoHttpLoggingInterceptor() {
-        assertEquals(0, interceptors(HttpClientFactory.apiClient(), HttpLoggingInterceptor.class).size());
-        assertEquals(0, interceptors(HttpClientFactory.imageClient(), HttpLoggingInterceptor.class).size());
+        assertFalse(hasHttpLoggingInterceptor(HttpClientFactory.apiClient()));
+        assertFalse(hasHttpLoggingInterceptor(HttpClientFactory.imageClient()));
     }
 
     @Test
@@ -69,5 +69,11 @@ public class HttpClientFactoryTest {
                 .filter(type::isInstance)
                 .map(type::cast)
                 .collect(java.util.stream.Collectors.toList());
+    }
+
+    private static boolean hasHttpLoggingInterceptor(OkHttpClient client) {
+        return client.interceptors().stream()
+                .anyMatch(interceptor -> interceptor.getClass().getName()
+                        .contains("HttpLoggingInterceptor"));
     }
 }
